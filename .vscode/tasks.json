@@ -1,0 +1,38 @@
+{   "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cmake",//cmake操作。
+            "type":"shell",           
+            "command":"cmake",//执行cmake操作所使用的命令。
+            "args": [ 
+                "-DCMAKE_BUILD_TYPE=Debug","-DCMAKE_INSTALL_PREFIX=../install ",".."
+            ],
+			"options": {
+				"cwd": "${workspaceFolder}/build"  //表示执行上述操作时的工作目录。
+			},
+        },
+        {
+            "label": "TRICP Build",              //make 操作。    
+			"type": "shell",
+            "command": "make",        
+            "options": {
+                "cwd": "${workspaceFolder}/build" //表示执行当前操作的工作目录。
+            },
+			"dependsOn":"cmake"
+			
+        },
+		{
+            "label": "make install",//cmake操作。
+            "type":"shell",           
+            "command":"make",//执行cmake操作所使用的命令。
+            "args": [ 
+                "install"
+            ],
+			"options": {
+				"cwd": "${workspaceFolder}/build"  //表示执行上述操作时的工作目录。
+			},
+			"dependsOn":"TRICP Build"
+        }
+    ],
+   
+}

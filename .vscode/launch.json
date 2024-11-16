@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "bathymetric_slam Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/link/bathymetric_slam/bin/bathy_slam_real",
+            //"args": ["--simulation","no ", "--bathy_survey","/home/link/sim_data/Pipeline/pipeline.cereal","--config","../config.yaml"],
+            //"args": ["--simulation","yes", "--bathy_survey","../sim_data/map_small/","--config","../config.yaml"],
+            "args": ["--simulation","yes", "--bathy_survey","/home/link/sim_data/mbes/","--config","../config.yaml"],
+            //"args": ["--simulation","yes", "--bathy_survey","/home/link/sim_data/Pipeline/mebs_pings/","--config","../config.yaml"],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "为 gdb 启用整齐打印",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "将反汇编风格设置为 Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "make install",
+        }
+
+    ]
+}
