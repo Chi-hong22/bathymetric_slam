@@ -3,12 +3,12 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**"  // 头文件搜索路径
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "/usr/bin/g++",
             "cStandard": "c17",
-            "cppStandard": "gnu++14",
+            "cppStandard": "gnu++14",  // C++标准
             "intelliSenseMode": "linux-gcc-x64"
         }
     ],

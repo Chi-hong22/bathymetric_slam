@@ -1,11 +1,13 @@
 {   "version": "2.0.0",
     "tasks": [
         {
-            "label": "cmake",//cmake操作。
+            "label": "cmake",  // CMake配置任务
             "type":"shell",           
             "command":"cmake",//执行cmake操作所使用的命令。
             "args": [ 
-                "-DCMAKE_BUILD_TYPE=Debug","-DCMAKE_INSTALL_PREFIX=../install ",".."
+                "-DCMAKE_BUILD_TYPE=Debug",  // 设置Debug模式
+                "-DCMAKE_INSTALL_PREFIX=../install", // 安装路径
+                ".."
             ],
 			"options": {
 				"cwd": "${workspaceFolder}/build"  //表示执行上述操作时的工作目录。
