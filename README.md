@@ -32,21 +32,24 @@ The method implemented is described [in this paper](https://ieeexplore.ieee.org/
 ```
 
 ## Dependencies (tested on Ubuntu 16.04 and 18.04)
-* AUVLIB [here](https://github.com/ignaciotb/auvlib) 
+* AUVLIB [nilsbore/auvlib](https://github.com/nilsbore/auvlib?tab=readme-ov-file) 
 * PCL  http://pointclouds.org/
+```bash
+sudo apt install libpcl-dev pcl-tools
+```
 * G2O https://github.com/RainerKuemmerle/g2o
-* Ceres http://ceres-solver.org/
+* Ceres http://ceres-solver.org/installation.html
 
 Note that for G2O to be used by this repo you need to install it at a system level.
 From the G2O build folder, run  
-```
+```bash
 sudo make install
 ```
 
 ## Building
 
 Clone this repository and create a `build` folder under the root, then execute
-```
+```bash
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=../install ..
 make -j4
@@ -54,7 +57,7 @@ make install
 ```
 
 Finally, add the following line to your ~/.bashrc file adapted to your own installation
-```
+```bash
 export PATH=$PATH:/path/to/folder/bathymetric_slam/install/share
 ```
 ### Available apps
@@ -65,7 +68,7 @@ The current script optimizes the graph with Ceres, but the app outputs a "graph.
 ##### SLAM with simulated data
 In order to test the framework with data from the [SMARC simulator](https://github.com/smarc-project), use the toy dataset `map_small` under `sim_data`. 
 You can visualize both the ground truth map and vehicle trajectory in the visualizer. To start the optimization process, hit "q".
-```
+```bash
 ./bathy_slam_real --simulation yes --bathy_survey ../sim_data/map_small/
 ```
 The simulation outputs a measure of the error contained in the map, as well as the height maps and error plots as .png files.
