@@ -31,7 +31,7 @@ The method implemented is described [in this paper](https://ieeexplore.ieee.org/
 }
 ```
 
-## Dependencies (tested on Ubuntu 16.04 and 18.04)
+## Dependencies (tested on Ubuntu 20.04)
 * AUVLIB [nilsbore/auvlib](https://github.com/nilsbore/auvlib?tab=readme-ov-file) 
 * PCL  http://pointclouds.org/
 ```bash
