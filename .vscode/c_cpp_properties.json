@@ -3,13 +3,21 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"  // 头文件搜索路径
+                "${workspaceFolder}/**" , // 头文件搜索路径
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/graph_optimization/include",
+                "${workspaceFolder}/graph_optimization/src",
+                "${workspaceFolder}/submaps_tools/include",
+                "${workspaceFolder}/submaps_tools/src"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/g++",
             "cStandard": "c17",
-            "cppStandard": "gnu++14",  // C++标准
-            "intelliSenseMode": "linux-gcc-x64"
+            "cppStandard": "c++14",  // C++标准
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "-std=c++17"
+            ]
         }
     ],
     "version": 4

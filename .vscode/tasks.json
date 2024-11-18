@@ -7,6 +7,7 @@
             "args": [ 
                 "-DCMAKE_BUILD_TYPE=Debug",  // 设置Debug模式
                 "-DCMAKE_INSTALL_PREFIX=../install", // 安装路径
+                
                 ".."
             ],
 			"options": {
@@ -23,7 +24,7 @@
 			"dependsOn":"cmake"
 			
         },
-		{
+        {
             "label": "make install",//cmake操作。
             "type":"shell",           
             "command":"make",//执行cmake操作所使用的命令。
@@ -36,5 +37,4 @@
 			"dependsOn":"TRICP Build"
         }
     ],
-   
 }

@@ -34,10 +34,10 @@ namespace optimizer {
 // Constructs the nonlinear least squares optimization problem from the pose
 // graph constraints.
 void BuildOptimizationProblem(const VectorOfConstraints& constraints,
-                              MapOfPoses* poses, ceres::Problem* problem);
+                              MapOfPoses* poses, ::ceres::Problem* problem);
 
 // Returns true if the solve was successful.
-int SolveOptimizationProblem(ceres::Problem* problem);
+int SolveOptimizationProblem(::ceres::Problem* problem);
 
 // Output the poses to the file with format: id x y z q_x q_y q_z q_w.
 bool OutputPoses(const std::string& filename, const MapOfPoses& poses);

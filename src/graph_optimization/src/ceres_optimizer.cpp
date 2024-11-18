@@ -11,13 +11,14 @@
 
 #include "graph_optimization/ceres_optimizer.hpp"
 
+
 namespace ceres{
 namespace optimizer {
 
 // Constructs the nonlinear least squares optimization problem from the pose
 // graph constraints.
 void BuildOptimizationProblem(const VectorOfConstraints& constraints,
-                              MapOfPoses* poses, ceres::Problem* problem,
+                              MapOfPoses* poses, ::ceres::Problem* problem,
                               int drConstraints) {
     CHECK(poses != NULL);
     CHECK(problem != NULL);
@@ -48,7 +49,7 @@ void BuildOptimizationProblem(const VectorOfConstraints& constraints,
         // Cost function
         const Eigen::Matrix<double, 6, 6> sqrt_information =
             constraint.information.llt().matrixL();
-        ceres::CostFunction* cost_function =
+        ::ceres::CostFunction* cost_function =
             PoseGraph3dErrorTerm::Create(constraint.t_be, sqrt_information);
 
         // Residual block
@@ -106,7 +107,7 @@ void BuildOptimizationProblem(const VectorOfConstraints& constraints,
                 constraint.information.llt().matrixL();
 
             // Cost function
-            ceres::CostFunction* cost_function =
+            ::ceres::CostFunction* cost_function =
                 PoseGraph3dErrorTerm::Create(constraint.t_be, sqrt_information);
 
             // Residual block
@@ -154,26 +155,26 @@ void BuildOptimizationProblem(const VectorOfConstraints& constraints,
 }
 
 // Returns true if the solve was successful.
-int SolveOptimizationProblem(ceres::Problem* problem) {
+int SolveOptimizationProblem(::ceres::Problem* problem) {
     CHECK(problem != NULL);
 
-    ceres::Solver::Options options;
+    ::ceres::Solver::Options options;
     options.max_num_iterations = 300;
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.linear_solver_type = ::ceres::SPARSE_NORMAL_CHOLESKY;
 //    options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
 //    options.linear_solver_type = ceres::SPARSE_SCHUR;
 //    options.linear_solver_type = ceres::SPARSE_QR;
     //options.linear_solver_type = ceres::DENSE_QR;
 
     //  options.minimizer_type = ceres::LINE_SEARCH;
-    options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+    options.trust_region_strategy_type = ::ceres::LEVENBERG_MARQUARDT;
     options.use_inner_iterations = false;
     options.minimizer_progress_to_stdout = true;
     options.num_threads =4;
     options.eta = 1e-9;
 
-    ceres::Solver::Summary summary;
-    ceres::Solve(options, problem, &summary);
+    ::ceres::Solver::Summary summary;
+    ::ceres::Solve(options, problem, &summary);
 //    std::cout << summary.FullReport() << '\n';
 
 
@@ -206,38 +207,38 @@ bool OutputPoses(const std::string& filename, const MapOfPoses& poses) {
 
 MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
     // Ceres solver
-    ceres::optimizer::MapOfPoses poses;
-    ceres::optimizer::VectorOfConstraints constraints;
+    ::ceres::optimizer::MapOfPoses poses;
+    ::ceres::optimizer::VectorOfConstraints constraints;
 
-    CHECK(ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
+    CHECK(::ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
         << "Error reading the file: " << outFilename;
 
-    CHECK(ceres::optimizer::OutputPoses("poses_corrupted.txt", poses))
+    CHECK(::ceres::optimizer::OutputPoses("poses_corrupted.txt", poses))
         << "Error outputting to poses_corrupted.txt";
 
     std::cout << "Original poses output" << std::endl;
 
-    ceres::Problem problem;
-    ceres::optimizer::BuildOptimizationProblem(constraints, &poses, &problem, drConstraints);
+    ::ceres::Problem problem;
+    ::ceres::optimizer::BuildOptimizationProblem(constraints, &poses, &problem, drConstraints);
 
     std::cout << "Ceres problem built" << std::endl;
 
-    int iterations = ceres::optimizer::SolveOptimizationProblem(&problem);
+    int iterations = ::ceres::optimizer::SolveOptimizationProblem(&problem);
 //        << "The solve was not successful, exiting.";
 
-    CHECK(ceres::optimizer::OutputPoses("poses_optimized.txt", poses))
+    CHECK(::ceres::optimizer::OutputPoses("poses_optimized.txt", poses))
         << "Error outputting to poses_optimized.txt";
 
     return poses;
 }
 
-void updateSubmapsCeres(const ceres::optimizer::MapOfPoses& poses, SubmapsVec& submaps_set){
+void updateSubmapsCeres(const ::ceres::optimizer::MapOfPoses& poses, SubmapsVec& submaps_set){
 
     // Update pointclouds
     unsigned int i = 0;
     for(SubmapObj& submap: submaps_set){
         // Final pose of submap_i
-        ceres::optimizer::Pose3d pose_i = poses.at(i);
+        ::ceres::optimizer::Pose3d pose_i = poses.at(i);
         Eigen::Quaterniond q = Eigen::AngleAxisd(pose_i.q.x(), Eigen::Vector3d::UnitX())
                                * Eigen::AngleAxisd(pose_i.q.y(), Eigen::Vector3d::UnitY())
                                * Eigen::AngleAxisd(pose_i.q.z(), Eigen::Vector3d::UnitZ());
@@ -270,12 +271,12 @@ void saveOriginalTrajectory(SubmapsVec& submaps_set){
 
     string outFilename = "graph_original.g2o";
     graph->saveG2OFile(outFilename);
-    ceres::optimizer::MapOfPoses poses;
-    ceres::optimizer::VectorOfConstraints constraints;
-    CHECK(ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
+    ::ceres::optimizer::MapOfPoses poses;
+    ::ceres::optimizer::VectorOfConstraints constraints;
+    CHECK(::ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
         << "Error reading the file: " << outFilename;
 
-    CHECK(ceres::optimizer::OutputPoses("poses_original.txt", poses))
+    CHECK(::ceres::optimizer::OutputPoses("poses_original.txt", poses))
         << "Error outputting to poses_original.txt";
 }
 

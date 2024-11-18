@@ -25,15 +25,17 @@ set( CMAKE_BUILD_TYPE "Release" )
 # locations on all platforms.
 include(GNUInstallDirs)
 
-find_package(Ceres REQUIRED)
+find_package(Ceres 2.0.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(PCL 1.8 REQUIRED)
+# include_directories(${EIGEN3_INCLUDE_DIR})
+find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(g2o REQUIRED)
 find_package(yaml-cpp)
 
 # AUVLIB stuff
 #  find_package(LIBIGL REQUIRED QUIET)
+# set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "/home/u/code_workplace/cpp/external/auvlib/build/src/libxtf")
 find_package(LibXTF REQUIRED)
 find_package(LibGSF REQUIRED)
 find_package(EigenCereal REQUIRED)
