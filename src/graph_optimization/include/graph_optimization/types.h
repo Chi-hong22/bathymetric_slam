@@ -20,7 +20,7 @@
 #include "Eigen/Core"
 #include "Eigen/Geometry"
 
-namespace ceres{
+namespace ceres_{
 namespace optimizer{
 
 struct Pose3d {
@@ -37,8 +37,7 @@ struct Pose3d {
 
 std::istream& operator>>(std::istream& input, Pose3d& pose);
 
-typedef std::map<int, Pose3d, std::less<int>,
-                 Eigen::aligned_allocator<std::pair<const int, Pose3d>>> MapOfPoses;
+typedef std::map<int, Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int, Pose3d>>> MapOfPoses;
 
 // The constraint between two vertices in the pose graph. The constraint is the
 // transformation from vertex id_begin to vertex id_end.

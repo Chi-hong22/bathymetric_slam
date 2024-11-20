@@ -11,8 +11,8 @@
 
 #include "graph_optimization/types.h"
 
-namespace ceres {
-namespace optimizer {
+namespace ceres_{
+namespace optimizer{
 
 std::istream& operator>>(std::istream& input, Pose3d& pose) {
     Eigen::Vector3d p;

@@ -17,7 +17,7 @@
 
 #include "graph_optimization/types.h"
 
-namespace ceres {
+namespace ceres_{
 namespace optimizer {
 
 template <typename T> Eigen::Quaternion<T> eulerToQuat(const Eigen::Matrix<T,3,1>& vec){

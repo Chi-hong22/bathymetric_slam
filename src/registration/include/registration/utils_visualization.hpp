@@ -23,8 +23,9 @@
 #include <Eigen/Core>
 
 #include "submaps_tools/submaps.hpp"
-#include "graph_optimization/graph_construction.hpp"
 #include "graph_optimization/ceres_optimizer.hpp"
+#include "graph_optimization/graph_construction.hpp"
+
 
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;

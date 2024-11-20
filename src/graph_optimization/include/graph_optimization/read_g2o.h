@@ -39,7 +39,7 @@
 
 #include "glog/logging.h"
 
-namespace ceres{
+namespace ceres_{
 namespace optimizer{
 
 // Reads a single pose from the input and inserts it into the map. Returns false

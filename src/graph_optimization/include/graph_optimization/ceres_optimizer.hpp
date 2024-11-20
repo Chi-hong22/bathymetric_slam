@@ -28,27 +28,26 @@
 #include "glog/logging.h"
 
 
-namespace ceres{
-namespace optimizer {
+namespace ceres_ {
+    namespace optimizer {
+        // 构建非线性最小二乘优化问题
+        void BuildOptimizationProblem(const VectorOfConstraints& constraints, MapOfPoses* poses, ::ceres::Problem* problem);
 
-// Constructs the nonlinear least squares optimization problem from the pose
-// graph constraints.
-void BuildOptimizationProblem(const VectorOfConstraints& constraints,
-                              MapOfPoses* poses, ceres::Problem* problem);
+        // 返回优化是否成功
+        int SolveOptimizationProblem(::ceres::Problem* problem);
 
-// Returns true if the solve was successful.
-int SolveOptimizationProblem(ceres::Problem* problem);
+        // 将位姿输出到文件
+        bool OutputPoses(const std::string& filename, const MapOfPoses& poses);
 
-// Output the poses to the file with format: id x y z q_x q_y q_z q_w.
-bool OutputPoses(const std::string& filename, const MapOfPoses& poses);
+        // 使用 Ceres 求解器进行优化并输出结果
+        MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints);
 
-MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints);
+        // 更新子图
+        void updateSubmapsCeres(const MapOfPoses &poses, SubmapsVec& submaps_set);
 
-void updateSubmapsCeres(const MapOfPoses &poses, SubmapsVec& submaps_set);
-
-void saveOriginalTrajectory(SubmapsVec& submaps_set);
-
-}
+        // 保存原始轨迹
+        void saveOriginalTrajectory(SubmapsVec& submaps_set);
+    }
 }
 
 #endif // CERES_OPTIMIZER_HPP
