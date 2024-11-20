@@ -2,7 +2,7 @@ project(graph_optimization)
 
 # set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/g2o_tools)
 
-#include_directories(include)
+include_directories(include ${PCL_INCLUDE_DIRS})
 
 # Add libraries and executables
 add_library(utils_g2o
@@ -28,43 +28,51 @@ add_library(ceres_optimizer
 target_include_directories(utils_g2o PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${PCL_INCLUDE_DIRS}
     PRIVATE src)
 
 target_include_directories(graph_construction PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${PCL_INCLUDE_DIRS}
     PRIVATE src)
 
 target_include_directories(read_g2o PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${PCL_INCLUDE_DIRS}
     PRIVATE src)
 
 target_include_directories(ceres_optimizer PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${PCL_INCLUDE_DIRS}
     PRIVATE src)
 
 target_link_libraries(utils_g2o
 	submaps_tools
 	${G2O_LIBS}
+    ${PCL_LIBRARY_DIRS}
 )
 
 target_link_libraries(graph_construction
 	submaps_tools
         utils_g2o
 	${G2O_LIBS}
+    ${PCL_LIBRARY_DIRS}
 )
 
 target_link_libraries(ceres_optimizer
 	ceres 
         submaps_tools
 	${GFLAGS_LIBRARIES}
+    ${PCL_LIBRARY_DIRS}
 )
 
 target_link_libraries(read_g2o 
 	ceres 
 	${GFLAGS_LIBRARIES}
+    ${PCL_LIBRARY_DIRS}
 )
 
 # 'make install' to the correct locations (provided by GNUInstallDirs).

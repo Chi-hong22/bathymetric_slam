@@ -38,7 +38,7 @@ The method implemented is described [in this paper](https://ieeexplore.ieee.org/
 sudo apt install libpcl-dev pcl-tools
 ```
 * G2O https://github.com/RainerKuemmerle/g2o
-* Ceres [ceres-solver-2.1.0](http://ceres-solver.org/installation.html)
+* Ceres [ceres-solver-2.1.0](http://ceres-solver.org/installation.html)  [ceres-solver-2.0.0](https://github.com/ceres-solver/ceres-solver/releases/tag/2.0.0)
 
 Note that for G2O to be used by this repo you need to install it at a system level.
 From the G2O build folder, run  

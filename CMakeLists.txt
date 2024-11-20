@@ -11,6 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(src)
 
 # 设置 OpenGL_GL_PREFERENCE 策略
-#set(OpenGL_GL_PREFERENCE GLVND)
+set(OpenGL_GL_PREFERENCE GLVND)
 
 

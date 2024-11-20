@@ -1,0 +1,3 @@
+/usr/local/lib/libsubmaps_tools.a
+/usr/local/share/SubmapsTools/cmake/SubmapsToolsConfig.cmake
+/usr/local/share/SubmapsTools/cmake/SubmapsToolsConfig-noconfig.cmake

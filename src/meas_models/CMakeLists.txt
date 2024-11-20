@@ -1,8 +1,9 @@
+cmake_minimum_required(VERSION 3.16)
 project(meas_models)
 
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/submaps)
 
-include_directories(include)
+include_directories(include ${PCL_INCLUDE_DIRS})
 
 add_library(multibeam_simple
     src/multibeam_simple.cpp
@@ -14,6 +15,7 @@ add_library(multibeam_simple
 target_include_directories(multibeam_simple PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${PCL_INCLUDE_DIRS}
     PRIVATE src
 )
 
