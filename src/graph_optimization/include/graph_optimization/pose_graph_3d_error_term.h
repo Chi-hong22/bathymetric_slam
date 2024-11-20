@@ -69,9 +69,9 @@ class PoseGraph3dErrorTerm {
     return true;
   }
 
-  static ceres::CostFunction* Create(const Pose3d& t_ab_measured, const Eigen::Matrix<double, 6, 6>& sqrt_information)
+  static ::ceres::CostFunction* Create(const Pose3d& t_ab_measured, const Eigen::Matrix<double, 6, 6>& sqrt_information)
   {
-    return new ceres::AutoDiffCostFunction<PoseGraph3dErrorTerm, 6, 3, 3, 3, 3>(
+    return new ::ceres::AutoDiffCostFunction<PoseGraph3dErrorTerm, 6, 3, 3, 3, 3>(
         new PoseGraph3dErrorTerm(t_ab_measured, sqrt_information));
   }
 

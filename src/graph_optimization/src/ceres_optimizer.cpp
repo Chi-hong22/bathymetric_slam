@@ -11,7 +11,6 @@
 
 #include "graph_optimization/ceres_optimizer.hpp"
 
-
 namespace ceres{
 namespace optimizer {
 

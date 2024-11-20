@@ -11,7 +11,14 @@
 
 #include "submaps_tools/submaps.hpp"
 #include <iomanip>
-
+//
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <regex>
+#include <dirent.h>
+//
 using namespace Eigen;
 
 DRNoise loadDRNoiseFromFile(YAML::Node config) {
@@ -33,7 +40,7 @@ SubmapObj::SubmapObj(const DRNoise& dr_noise){
 SubmapObj::SubmapObj(const unsigned int& submap_id, const unsigned int& swath_id, PointCloudT& submap_pcl, const DRNoise& dr_noise):
             submap_id_(submap_id), swath_id_(swath_id), submap_pcl_(submap_pcl){
 
-    // AUV pose estimate while acquiring submap
+    // AUV pose estimate while acquiring submaph获得子地图auv位姿估计,
     submap_tf_ = (Eigen::Isometry3f) submap_pcl.sensor_orientation_;
     submap_tf_.translation() = Eigen::Vector3f(submap_pcl.sensor_origin_.head(3));
 
@@ -191,7 +198,7 @@ std::vector<std::string> checkFilesInDir(DIR *dir){
     return files;
 }
 
-
+/*
 std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(const string& dir_path, const DRNoise& dr_noise){
 
     std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> submaps_set;
@@ -200,7 +207,6 @@ std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(con
         // Open directory and check all files inside
         std::vector<std::string> files = checkFilesInDir(dir);
         std::sort(files.begin(), files.end());
-
         PointCloudT::Ptr submap_ptr (new PointCloudT);
         // For every file in the dir
         int submap_cnt = 0;
@@ -212,8 +218,8 @@ std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(con
             std::cout << "Reading file: " << file_name << std::endl;
             readSubmapFile(file_name, submap_ptr);
             // Update swath counter
-            euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
-            if(abs(euler[2] - prev_direction) > M_PI/2 /*&& euler[0]>0.0001*/){
+            euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);//
+            if(abs(euler[2] - prev_direction) > M_PI/2 ){
                 swath_cnt = swath_cnt + 1;
                 prev_direction = euler[2];
             }
@@ -227,9 +233,63 @@ std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(con
          }
     }
     return submaps_set;
+}*/
+//-----------------------------------------
+// 提取文件名中的数字
+int extractNumber(const std::string& filename) {
+    std::regex num_regex("_(\\d+)_"); // 匹配 "_数字_"
+    std::smatch match;
+    if (std::regex_search(filename, match, num_regex)) {
+        return std::stoi(match[1]); // 返回匹配到的数字
+    }
+    return 0; // 如果没有匹配到数字，返回0
 }
 
 
+
+
+std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(const std::string& dir_path, const DRNoise& dr_noise) {
+    std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> submaps_set;
+    DIR* dir;
+    if ((dir = opendir(dir_path.c_str())) != NULL) {
+        // 打开目录并获取所有文件名
+        std::vector<std::string> files = checkFilesInDir(dir);
+
+        // 按照文件名中的数字部分进行排序
+        std::sort(files.begin(), files.end(), [](const std::string& a, const std::string& b) {
+            return extractNumber(a) < extractNumber(b);
+        });
+
+        PointCloudT::Ptr submap_ptr(new PointCloudT);
+        int submap_cnt = 0;
+        int swath_cnt = 0;
+        double prev_direction = 0;
+        Eigen::Vector3f euler;
+
+        for (const std::string& file : files) {
+            std::string file_name = dir_path + file;
+            std::cout << "Reading file: " << file_name << std::endl;
+            readSubmapFile(file_name, submap_ptr);
+
+            // 更新 swath 计数器
+            euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
+            if (abs(euler[2] - prev_direction) > M_PI / 2) {
+                swath_cnt++;
+                prev_direction = euler[2];
+            }
+
+            SubmapObj submap_i(submap_cnt, swath_cnt, *submap_ptr, dr_noise);
+
+            // 将 AUV 轨迹添加到子地图对象
+            submap_i.auv_tracks_.conservativeResize(submap_i.auv_tracks_.rows() + 1, 3);
+            submap_i.auv_tracks_.row(0) = submap_i.submap_tf_.translation().transpose().cast<double>();
+            submaps_set.push_back(submap_i);
+            submap_cnt++;
+        }
+    }
+    return submaps_set;
+}
+//---------------------------------------------------------
 PointsT pclToMatrixSubmap(const SubmapsVec& submaps_set){
 
     PointsT submaps;
@@ -273,10 +333,10 @@ Eigen::Array3f computeInfoInSubmap(const SubmapObj& submap){
 
     return cond_num;
 }
-
+//SubmapsVec为子图的集合，该函数输入多波束探测pings，输出子地图
 SubmapsVec parsePingsAUVlib(std_data::mbes_ping::PingsT& pings, const DRNoise& dr_noise){
 
-    SubmapsVec pings_subs;
+    SubmapsVec pings_subs;//SubmapsVec子图集
     std::cout << std::fixed;
     std::cout << std::setprecision(10);
 

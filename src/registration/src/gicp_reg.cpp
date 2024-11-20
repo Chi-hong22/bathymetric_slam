@@ -9,8 +9,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "registration/gicp_reg.hpp"
-
+#include "/home/link/bathymetric_slam/src/registration/include/registration/gicp_reg.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -41,20 +40,21 @@ SubmapRegistration::~SubmapRegistration(){
 }
 
 void SubmapRegistration::loadConfig(YAML::Node config){
-    gicp_.setMaxCorrespondenceDistance(config["gicp_max_correspondence_distance"].as<double>());
-    gicp_.setMaximumIterations(config["gicp_maximum_iterations"].as<int>());
-    gicp_.setTransformationEpsilon(config["gicp_transform_epsilon"].as<double>());
-    gicp_.setEuclideanFitnessEpsilon(config["gicp_euclidean_fitness_epsilon"].as<double>());
-    gicp_.setRANSACOutlierRejectionThreshold(config["gicp_ransac_outlier_rejection_threshold"].as<double>());
-    normal_use_knn_search = config["gicp_normal_use_knn_search"].as<bool>();
-    normal_search_radius = config["gicp_normal_search_radius"].as<double>();
-    normal_search_k_neighbours = config["gicp_normal_search_k_neighbours"].as<int>();
-    info_diag_values = config["gicp_info_diag"].as<std::vector<double>>();
+    gicp_.setMaxCorrespondenceDistance(config["gicp_max_correspondence_distance"].as<double>());//设置最大对应距离，此参数决定了在两点之间的匹配点的最大距离，超过该距离的点对将被忽略，用于减少不相关的噪声点的影响。
+    gicp_.setMaximumIterations(config["gicp_maximum_iterations"].as<int>());//设置GICP算法的最大迭代次数，用于控制迭代收敛的时间。
+    gicp_.setTransformationEpsilon(config["gicp_transform_epsilon"].as<double>());//设置变换增量的阈值。此参数控制了算法的收敛精度，当变换的变化量小语言此值时，算法认为已经收敛。
+    gicp_.setEuclideanFitnessEpsilon(config["gicp_euclidean_fitness_epsilon"].as<double>());//设置欧几里得适配度阈值，用于评估点云配准的效果，通常配准越好，该值越小
+    gicp_.setRANSACOutlierRejectionThreshold(config["gicp_ransac_outlier_rejection_threshold"].as<double>());//设置RANSAC的离群点剔除阈值，用于剔除不符合配准模型的离群点，提升配准的鲁棒性。
+    normal_use_knn_search = config["gicp_normal_use_knn_search"].as<bool>();//指定法向量计算是否使用K近邻搜索，通常用在法向量估计时，设置为true表示使用
+    normal_search_radius = config["gicp_normal_search_radius"].as<double>();//指定法向量计算的搜索半径，用于选择法向量估计时考虑的临近点范围
+    normal_search_k_neighbours = config["gicp_normal_search_k_neighbours"].as<int>();//指定K近邻算法的邻居数量，用于法向量计算，控制考虑的最近点数量。
+    info_diag_values = config["gicp_info_diag"].as<std::vector<double>>();//设置信息矩阵的对角线值（通常为3个数值，分别对应x\y\z方向）。信息矩阵用于配准后位姿的优化，指定不同方向上的不确定性，用于约束配准结果的准确性。
 }
 
 SubmapObj SubmapRegistration::constructTrgSubmap(const SubmapsVec& submaps_set, std::vector<int>& overlaps, const DRNoise& dr_noise){
 
     // Merge submaps in overlaps into submap_trg
+    
     SubmapObj submap_trg(dr_noise);
     std::cout << "Target submap consists of: ";
     for(SubmapObj submap_j: submaps_set){

@@ -15,7 +15,7 @@
 #include <math.h>
 #include <Eigen/Core>
 
-#include <pcl/registration/gicp.h>
+#include </usr/include/pcl-1.10/pcl/registration/gicp.h>
 #include <pcl/registration/warp_point_rigid.h>
 #include <pcl/registration/warp_point_rigid_3d.h>
 #include <pcl/registration/transformation_estimation_lm.h>
@@ -37,29 +37,29 @@ typedef std::shared_ptr <CovsVec > CovsVecPtr;
 class SubmapRegistration {
 
 private:
-    pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp_;
-    Eigen::Matrix4f ret_tf_;
-    benchmark::track_error_benchmark benchmark_;
-    bool normal_use_knn_search;
-    double normal_search_radius;
-    int normal_search_k_neighbours;
-    std::vector<double> info_diag_values;
+    pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp_;//GICP算法的实例，用于执行子地图之间的配准
+    Eigen::Matrix4f ret_tf_;//储存配准过程中计算得到的变换矩阵
+    benchmark::track_error_benchmark benchmark_;//一个用于跟踪误差的基准对象，可以用于评估配准结果的误差
+    bool normal_use_knn_search;//指示是否使用KNN搜索来计算发现
+    double normal_search_radius;//发现搜索的半径
+    int normal_search_k_neighbours;//发现搜索的近邻数目
+    std::vector<double> info_diag_values;//信息矩阵的对角线值，用于配准过程中的噪声模型
 
 public:
 
     SubmapRegistration(YAML::Node config);
 
-    void loadConfig(YAML::Node config);
+    void loadConfig(YAML::Node config);//加载配置参数
 
-    bool gicpSubmapRegistration(SubmapObj &trg_submap, SubmapObj &src_submap);
+    bool gicpSubmapRegistration(SubmapObj &trg_submap, SubmapObj &src_submap);//对目标子地图和源子地图进行配准
 
-    bool gicpSubmapRegistrationSimple(SubmapObj& trg_submap, SubmapObj& src_submap);
+    bool gicpSubmapRegistrationSimple(SubmapObj& trg_submap, SubmapObj& src_submap);//简化配准方法
 
-    void transformSubmap(SubmapObj& submap);
+    void transformSubmap(SubmapObj& submap);//对子地图进行变换
 
-    SubmapObj constructTrgSubmap(const SubmapsVec& submaps_set, std::vector<int> &overlaps, const DRNoise& dr_noise);
+    SubmapObj constructTrgSubmap(const SubmapsVec& submaps_set, std::vector<int> &overlaps, const DRNoise& dr_noise);//根据子地图集合、重叠信息和噪声，构造目标子地图
 
-    double consistencyErrorOverlap(const SubmapObj& trg_submap, const SubmapObj& src_submap);
+    double consistencyErrorOverlap(const SubmapObj& trg_submap, const SubmapObj& src_submap);//计算目标子地图和源子地图之间的重叠一致性误差
 
     ~SubmapRegistration();
 

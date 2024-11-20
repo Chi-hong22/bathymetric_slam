@@ -140,7 +140,7 @@ void GraphConstructor::findLoopClosures(SubmapObj& submap_i, const SubmapsVec& s
 
 
 void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
-
+     std::cout << "程序运行成功 143" <<  std::endl;
     // Concatenate all the odometry constraints to compute the initial kinematic chain
     for (size_t i =0; i < drEdges_.size(); i++) {
         Eigen::Isometry3d meas_i = drMeas_.at(i);

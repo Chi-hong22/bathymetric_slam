@@ -51,7 +51,7 @@ private:
 
 public:
     int submap_id_;
-    int swath_id_;
+    int swath_id_;//样品id
     PointCloudT submap_pcl_;
     std::vector<int> overlaps_idx_;
     Eigen::Vector3d colors_;
@@ -60,7 +60,7 @@ public:
     Eigen::Matrix<double,6,6> submap_lc_info_;
     Eigen::MatrixXd auv_tracks_;
 
-    SubmapObj(const DRNoise& dr_noise);
+    SubmapObj(const DRNoise& dr_noise);//生成信息矩阵
 
     SubmapObj(const unsigned int& submap_id, const unsigned int& swath_id, PointCloudT& submap_pcl, const DRNoise& dr_noise);
 

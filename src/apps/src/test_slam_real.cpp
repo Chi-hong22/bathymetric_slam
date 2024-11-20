@@ -17,9 +17,9 @@
 #include <boost/filesystem.hpp>
 #include <cereal/archives/binary.hpp>
 
-#include "data_tools/std_data.h"
-#include "data_tools/benchmark.h"
-
+//#include "data_tools/std_data.h"
+#include "/home/link/auvlib/auvlib/src/data_tools/include/data_tools/std_data.h"
+#include "/home/link/auvlib/auvlib/src/data_tools/include/data_tools/benchmark.h"
 #include "submaps_tools/cxxopts.hpp"
 #include "submaps_tools/submaps.hpp"
 
@@ -45,24 +45,24 @@ using namespace g2o;
 bool next_step = false;
 int current_step = 0;
 
-
+//将子地图和轨迹转化为矩阵格式
 void add_benchmark(SubmapsVec& submaps, benchmark::track_error_benchmark& benchmark, const string& name, bool is_groundtruth=false) {
-    PointsT map = pclToMatrixSubmap(submaps);
-    PointsT track = trackToMatrixSubmap(submaps);
+    PointsT map = pclToMatrixSubmap(submaps);//map中存多个子地图，每一个子地图包含当前子地图的所有多波束测点，每一个子地图的点包括N行3列
+    PointsT track = trackToMatrixSubmap(submaps);//将所有子地图的关键帧的位姿存在track中
     if (is_groundtruth) {
         benchmark.add_ground_truth(map, track);
     } else {
         benchmark.add_benchmark(map, track, name);
     }
 }
-
+//主要用于将地面真值 (ground truth, GT) 的子地图数据添加到基准测试对象中，并保存原始轨迹
 void benchmark_gt(SubmapsVec& submaps_gt, benchmark::track_error_benchmark& benchmark) {
     // Benchmark GT
     add_benchmark(submaps_gt, benchmark, "0_original", true);
-    ceres::optimizer::saveOriginalTrajectory(submaps_gt); // Save original trajectory to txt
+    ::ceres::optimizer::saveOriginalTrajectory(submaps_gt); // Save original trajectory to txt
     std::cout << "Visualizing original survey, press space to continue" << std::endl;
 }
-
+// 函数通过GICP子图配准和SLAM求解器，构建一个包含海洋深度图的SLAM图。
 SubmapsVec build_bathymetric_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_gt,
 GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config) {
 
@@ -76,7 +76,7 @@ GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config) {
     std::cout << "Done building graph, press space to continue" << std::endl;
     return submaps_reg;
 }
-
+//创建初始图形估计，如果add_gaussian_noise=true，则可选择添加高斯噪声
 // Create initial graph estimates, optionally add gaussian noise if add_gaussian_noise = true
 void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, GaussianGen& transSampler, GaussianGen& rotSampler, bool add_gaussian_noise) {
     std::cout << "Add gaussian noise = " << add_gaussian_noise << std::endl;
@@ -90,15 +90,15 @@ void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& subm
     std::cout << "Initial graph estimate constructed, press space to continue" << std::endl;
 
 }
-
+//图优化
 void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::string outFilename, char* argv0, boost::filesystem::path output_path) {
     // Save graph to output g2o file (optimization can be run with G2O)
     graph_obj.saveG2OFile(outFilename);
 
     // Optimize graph and save to cereal
     google::InitGoogleLogging(argv0);
-    ceres::optimizer::MapOfPoses poses = ceres::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
-    ceres::optimizer::updateSubmapsCeres(poses, submaps_reg);
+    ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
+    ::ceres::optimizer::updateSubmapsCeres(poses, submaps_reg);
     std::cout << "Output cereal: " << boost::filesystem::basename(output_path) << std::endl;
     std::ofstream os(boost::filesystem::basename(output_path) + ".cereal", std::ofstream::binary);
     {
@@ -108,7 +108,7 @@ void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::s
     }
     std::cout << "Graph optimized, press space to continue" << std::endl;
 }
-
+//实现了基准测试结果的打印和可视化
 void print_benchmark_results(SubmapsVec& submaps_reg, benchmark::track_error_benchmark& benchmark) {
     benchmark.print_summary();
 
@@ -116,7 +116,7 @@ void print_benchmark_results(SubmapsVec& submaps_reg, benchmark::track_error_ben
     const char *command = command_str.c_str();
     system(command);
 }
-
+//用于处理键盘事件，特别是当用户按下空格键时更新全局变量
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing) {
     if (event.getKeySym() == "space" && event.keyDown()) {
         next_step = true;
@@ -125,7 +125,9 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void*
 }
 
 int main(int argc, char** argv){
-    // Inputs
+    int linkto=100;
+    std::cout<<linkto<<std::endl;
+    // Inputs这里使用了 cxxopts 库解析命令行参数，包括帮助信息、是否使用模拟数据、输入路径和配置文件路径。
     std::string folder_str, path_str, output_str, simulation, config_path;
     cxxopts::Options options("MyProgram", "One line description of MyProgram");
     options.add_options()
@@ -139,7 +141,7 @@ int main(int argc, char** argv){
     if (result.count("help")) {
         cout << options.help({ "", "Group" }) << endl;
         exit(0);
-    }
+    }//配置文件加载和初始设置，设置输出文件路径，加载YAML配置文件，并读取其中定义的噪声参数。
     if(output_str.empty()){
         output_str = "output_cereal.cereal";
     }
@@ -151,6 +153,9 @@ int main(int argc, char** argv){
     DRNoise dr_noise = loadDRNoiseFromFile(config);
 
     // Parse submaps from cereal file
+    //解析输入数据并生成子地图
+    //解析输入数据，根据是否使用模拟数据选择不同的解析方法。
+    //如果使用真实数据，读取声呐ping数据并生成子地图，同时对点云数据进行体素滤波处理。
     boost::filesystem::path submaps_path(path_str);
     std::cout << "Input data " << submaps_path << std::endl;
 
@@ -161,6 +166,7 @@ int main(int argc, char** argv){
     else{
         std_data::mbes_ping::PingsT std_pings = std_data::read_data<std_data::mbes_ping::PingsT>(submaps_path);
         std::cout << "Number of pings in survey " << std_pings.size() << std::endl;
+        
         {
             SubmapsVec traj_pings = parsePingsAUVlib(std_pings, dr_noise);
             int submap_size = config["submap_size"].as<int>();
@@ -180,7 +186,7 @@ int main(int argc, char** argv){
                 submap_i.submap_pcl_ = *cloud_ptr;
             }
         }
-    }
+    }//构建图优化对象，读取协方差矩阵并初始化图优化构造对象 graph_obj。
     std::cout << "Number of submaps " << submaps_gt.size() << std::endl;
 
     // Graph constructor
@@ -190,9 +196,10 @@ int main(int argc, char** argv){
     if(boost::filesystem::is_directory(folder)) {
         covs_lc = readCovsFromFiles(folder);
     }
-    GraphConstructor graph_obj(covs_lc);
+    GraphConstructor graph_obj(covs_lc);//
 
     // Noise generators
+    //初始化噪声生成器和基准测试对象，用于后续的误差评估。
     GaussianGen transSampler, rotSampler;
     Matrix<double, 6,6> information = generateGaussianNoise(transSampler, rotSampler);
 
@@ -200,18 +207,25 @@ int main(int argc, char** argv){
     bool add_gaussian_noise = config["add_gaussian_noise"].as<bool>();
     
     benchmark::track_error_benchmark benchmark("real_data", config["benchmark_nbr_rows"].as<int>(), config["benchmark_nbr_cols"].as<int>());
-    std::cout << "Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
-
+    std::cout << "我在211行,Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
+     //如果 VISUAL 宏定义不等于1，按照以下顺序执行：
+        //对地面真值（GT）数据进行基准测试。
+        // 使用GICP方法构建测深图。
+        //添加基准测试，标记不同阶段的数据状态。
+        //创建初始图优化估计。
+        //优化图，并将优化后的结果记录到基准测试中。
 #if VISUAL != 1
     benchmark_gt(submaps_gt, benchmark);
     submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
     add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
     add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
-
+    std::cout << "程序运行成功 222" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
+    std::cout << "程序运行成功 224" <<  std::endl;
     create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
+    std::cout << "程序运行成功 226" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
-
+    std::cout << "程序运行成功 228" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
     optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
     add_benchmark(submaps_reg, benchmark, "6_optimized");
@@ -263,6 +277,6 @@ int main(int argc, char** argv){
     delete(visualizer);
     print_benchmark_results(submaps_reg, benchmark);
 #endif
-
+    std::cout << "程序运行成功 " <<  std::endl;
     return 0;
 }
