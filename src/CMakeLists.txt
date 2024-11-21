@@ -25,14 +25,16 @@ set( CMAKE_BUILD_TYPE "Release" )
 # locations on all platforms.
 include(GNUInstallDirs)
 
-find_package(Ceres 2.0.0 REQUIRED)
+find_package(Ceres 2.1.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
 # include_directories(${EIGEN3_INCLUDE_DIR})
-find_package(PCL 1.10 REQUIRED)
-include_directories(${PCL_INCLUDE_DIRS})
+find_package(PCL 1.14.0 REQUIRED)
+# include_directories(${PCL_INCLUDE_DIRS})
 find_package(OpenCV REQUIRED)
 find_package(g2o REQUIRED)
 find_package(yaml-cpp)
+# 查找 Boost 库，并指定需要的组件
+find_package(Boost REQUIRED COMPONENTS date_time)
 
 # AUVLIB stuff
 #  find_package(LIBIGL REQUIRED QUIET)

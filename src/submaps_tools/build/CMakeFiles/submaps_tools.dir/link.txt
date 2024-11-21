@@ -1,2 +1,0 @@
-/usr/bin/ar qc libsubmaps_tools.a  CMakeFiles/submaps_tools.dir/src/submaps.cpp.o
-/usr/bin/ranlib libsubmaps_tools.a

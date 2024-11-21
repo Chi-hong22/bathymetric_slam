@@ -10,7 +10,7 @@
  */
 
 #include "graph_optimization/ceres_optimizer.hpp"
-// #include "ceres/local_parameterization.h"
+
 
 namespace ceres_ {
 namespace optimizer {

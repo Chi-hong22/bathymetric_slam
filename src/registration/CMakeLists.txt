@@ -3,25 +3,25 @@ project(registration)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
 
-find_package(Ceres 2.0.0 REQUIRED)
-find_package(Eigen3 REQUIRED)
-# include_directories(${EIGEN3_INCLUDE_DIR})
-find_package(PCL 1.10 REQUIRED)
-include_directories(${PCL_INCLUDE_DIRS})
-find_package(OpenCV REQUIRED)
-find_package(g2o REQUIRED)
-find_package(yaml-cpp)
+# find_package(Ceres 2.0.0 REQUIRED)
+# find_package(Eigen3 REQUIRED)
+# # include_directories(${EIGEN3_INCLUDE_DIR})
+# find_package(PCL 1.14.0 REQUIRED)
+# # include_directories(${PCL_INCLUDE_DIRS})
+# find_package(OpenCV REQUIRED)
+# find_package(g2o REQUIRED)
+# find_package(yaml-cpp)
 
-# AUVLIB stuff
-#  find_package(LIBIGL REQUIRED QUIET)
-# set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "/home/u/code_workplace/cpp/external/auvlib/build/src/libxtf")
-find_package(LibXTF REQUIRED)
-find_package(LibGSF REQUIRED)
-find_package(EigenCereal REQUIRED)
-find_package(DataTools REQUIRED)
-find_package(SonarTracing REQUIRED)
-find_package(AuvlibGlad REQUIRED)
-find_package(BathyMaps REQUIRED)
+# # AUVLIB stuff
+# #  find_package(LIBIGL REQUIRED QUIET)
+# # set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "/home/u/code_workplace/cpp/external/auvlib/build/src/libxtf")
+# find_package(LibXTF REQUIRED)
+# find_package(LibGSF REQUIRED)
+# find_package(EigenCereal REQUIRED)
+# find_package(DataTools REQUIRED)
+# find_package(SonarTracing REQUIRED)
+# find_package(AuvlibGlad REQUIRED)
+# find_package(BathyMaps REQUIRED)
 
 
 include_directories(include ${PCL_INCLUDE_DIRS})
@@ -51,13 +51,13 @@ add_library(gicp_registration
 target_include_directories(utils_visualization PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${PCL_INCLUDE_DIRS}
+    # ${PCL_INCLUDE_DIRS}
     PRIVATE src)
 
 target_include_directories(gicp_registration PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${PCL_LIBRARY_DIRS}
+    # ${PCL_LIBRARY_DIRS}
     PRIVATE src)
 
 
@@ -71,14 +71,14 @@ target_link_libraries(utils_visualization PUBLIC
     submaps_tools
     graph_construction
     ceres_optimizer
-    ${PCL_LIBRARIES}
+    # ${PCL_LIBRARIES}
 )
 
 target_link_libraries(gicp_registration PUBLIC
     utils_visualization
     submaps_tools
     benchmark
-    ${PCL_LIBRARIES}
+    # ${PCL_LIBRARIES}
     ${YAML_CPP_LIBRARIES}
 )
 

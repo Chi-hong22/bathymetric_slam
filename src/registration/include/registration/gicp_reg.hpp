@@ -32,6 +32,10 @@
 #include "yaml-cpp/yaml.h"
 
 typedef std::vector<Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d> > CovsVec;
+// 类型不匹配问题：std::shared_ptr 和 boost::shared_ptr 不兼容
+// PCL GICP 实现中的协方差矩阵容器类型定义问题
+// 将 std::shared_ptr 改为 boost::shared_ptr
+// typedef boost::shared_ptr<std::vector<Eigen::Matrix3d, Eigen::aligned_allocator<Eigen::Matrix3d>>> CovsVecPtr;
 typedef std::shared_ptr <CovsVec > CovsVecPtr;
 
 class SubmapRegistration {

@@ -15,13 +15,13 @@ add_library(multibeam_simple
 target_include_directories(multibeam_simple PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${PCL_INCLUDE_DIRS}
+    # ${PCL_INCLUDE_DIRS}
     PRIVATE src
 )
 
 target_link_libraries(multibeam_simple PUBLIC
     submaps_tools
-    ${PCL_LIBRARIES}
+    # ${PCL_LIBRARIES}
 )
 
 # 'make install' to the correct locations (provided by GNUInstallDirs).

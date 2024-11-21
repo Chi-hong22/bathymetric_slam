@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 2.8)
 project(submaps_tools)
 
 # set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/submaps)
 
 
-find_package(PCL 1.10 REQUIRED)
+find_package(PCL 1.14.0 REQUIRED)
 
 
 include_directories(include ${PCL_INCLUDE_DIRS})
@@ -19,7 +19,7 @@ add_library(submaps_tools
 target_include_directories(submaps_tools PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${PCL_INCLUDE_DIRS}
+    # ${PCL_INCLUDE_DIRS}
     PRIVATE src)
 
 
@@ -27,7 +27,7 @@ target_link_libraries(submaps_tools
         std_data
         navi_data
         data_transforms
-        ${PCL_LIBRARY_DIRS}
+        # ${PCL_LIBRARY_DIRS}
 )
 
 # 'make install' to the correct locations (provided by GNUInstallDirs).

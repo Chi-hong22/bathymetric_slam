@@ -95,16 +95,18 @@ double SubmapRegistration::consistencyErrorOverlap(const SubmapObj& trg_submap,
 
 
 bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj& src_submap){
-    //N.B. this function modifies the src_submap when aligning it to
-
-    // Copy the originals to work over them
+    //N.B. this function modifies the src_submap when aligning it to Copy the originals to work over them
+    
+    // 保持原有点云拷贝部分不变
     PointCloudT::Ptr src_pcl_ptr (new PointCloudT(src_submap.submap_pcl_));
     PointCloudT::Ptr trg_pcl_ptr (new PointCloudT(trg_submap.submap_pcl_));
 
-    // Compute GICP covs externally
+    // 法向量估计器设置
     pcl::NormalEstimation<PointT, pcl::Normal> ne;
     pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ> ());
     ne.setSearchMethod(tree);
+    
+    // 设置搜索方法
     if (normal_use_knn_search) {
         std::cout << "Using KNN search with K neighbours: " << normal_search_k_neighbours << std::endl;
         ne.setKSearch(normal_search_k_neighbours);
@@ -112,15 +114,17 @@ bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj
         std::cout << "Use radius search with radius: " << normal_search_radius << std::endl;
         ne.setRadiusSearch(normal_search_radius);
     }
-
+    
+    // 计算源点云的法向量
     pcl::PointCloud<pcl::Normal>::Ptr normals_src(new pcl::PointCloud<pcl::Normal>);
     ne.setInputCloud(src_pcl_ptr);
     ne.compute(*normals_src);
-
+    
+    // 计算目标点云的法向量
     pcl::PointCloud<pcl::Normal>::Ptr normals_trg(new pcl::PointCloud<pcl::Normal>);
     ne.setInputCloud(trg_pcl_ptr);
     ne.compute(*normals_trg);
-
+    
     CovsVec covs_src;
     CovsVecPtr covs_src_ptr;
     pcl::features::computeApproximateCovariances(*src_pcl_ptr, *normals_src, covs_src);
@@ -147,10 +151,12 @@ bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj
     avg_cov_trg /= (covs_trg_ptr->size());
 
     // The Iterative Closest Point algorithm
+    // 设置 GICP
     gicp_.setInputSource(src_pcl_ptr);
     gicp_.setInputTarget(trg_pcl_ptr);
     gicp_.setSourceCovariances(covs_src_ptr);
     gicp_.setTargetCovariances(covs_trg_ptr);
+    // 执行配准
     gicp_.align (src_submap.submap_pcl_);
 
     // Apply transform to submap

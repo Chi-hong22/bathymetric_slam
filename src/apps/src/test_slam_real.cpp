@@ -59,7 +59,7 @@ void add_benchmark(SubmapsVec& submaps, benchmark::track_error_benchmark& benchm
 void benchmark_gt(SubmapsVec& submaps_gt, benchmark::track_error_benchmark& benchmark) {
     // Benchmark GT
     add_benchmark(submaps_gt, benchmark, "0_original", true);
-    ceres::optimizer::saveOriginalTrajectory(submaps_gt); // Save original trajectory to txt
+    ceres_::optimizer::saveOriginalTrajectory(submaps_gt); // Save original trajectory to txt
     std::cout << "Visualizing original survey, press space to continue" << std::endl;
 }
 
@@ -97,8 +97,8 @@ void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::s
 
     // Optimize graph and save to cereal
     google::InitGoogleLogging(argv0);
-    ceres::optimizer::MapOfPoses poses = ceres::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
-    ceres::optimizer::updateSubmapsCeres(poses, submaps_reg);
+    ceres_::optimizer::MapOfPoses poses = ceres_::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
+    ceres_::optimizer::updateSubmapsCeres(poses, submaps_reg);
     std::cout << "Output cereal: " << boost::filesystem::basename(output_path) << std::endl;
     std::ofstream os(boost::filesystem::basename(output_path) + ".cereal", std::ofstream::binary);
     {

@@ -25,6 +25,7 @@
 #include "submaps_tools/submaps.hpp"
 #include "graph_optimization/ceres_optimizer.hpp"
 #include "graph_optimization/graph_construction.hpp"
+// Ceres和G2O库都有ceres命名空间，造成引用不明确，所以先引用eres_optimizer.hpp
 
 
 
