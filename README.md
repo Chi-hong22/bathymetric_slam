@@ -81,7 +81,7 @@ The algorithm is **not** by default tuned for the toy example `map_small`.
 To run the SLAM solution with real data from a bathymetric survey, currently the input is in the form of a cereal file containing all the necessary information from your data files.
 You can find a real survey carried out with an ROV [here](https://strands.pdc.kth.se/public/IROS-2019-Bathymetry/). Download it, adjust the framework values, and test it.
 ```
-./bathy_slam_real --simulation no --bathy_survey /path/to/datasets/mbes_pings.cereal 
+./bathy_slam_real --simulation no --bathy_survey /path/to/datasets/mbes_pings.cereal --config config.yaml
 ```
 ### Generating your own cereal files from real surveys
 Take a look at the [AUVLIB](https://github.com/nilsbore/auvlib) toolbox in order to parse real MBES, SSS, navigation, etc data from the most common formats into .cereal files.

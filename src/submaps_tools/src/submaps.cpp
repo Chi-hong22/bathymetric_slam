@@ -169,9 +169,9 @@ bool pointToLine(const Vector3d seg_a, const Vector3d seg_b, const Vector3d poin
 }
 
 
-void readSubmapFile(const string submap_str, PointCloudT::Ptr submap_pcl){
+void readSubmapFile(const string submap_str, PointCloudT submap_pcl){
 
-    if (pcl::io::loadPCDFile<pcl::PointXYZ> (submap_str, *submap_pcl) == -1){
+    if (pcl::io::loadPCDFile<pcl::PointXYZ> (submap_str, submap_pcl) == -1){
         PCL_ERROR ("Couldn't read .pcd file \n");
     }
 }
@@ -196,36 +196,44 @@ std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(con
 
     std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> submaps_set;
     DIR *dir;
+    
     if ((dir = opendir(dir_path.c_str())) != NULL) {
+        
         // Open directory and check all files inside
         std::vector<std::string> files = checkFilesInDir(dir);
         std::sort(files.begin(), files.end());
 
-        PointCloudT::Ptr submap_ptr (new PointCloudT);
+        
         // For every file in the dir
         int submap_cnt = 0;
         int swath_cnt = 0;
         double prev_direction = 0;
         Eigen::Vector3f euler;
         for(const std::string file: files){
+            PointCloudT submap_ptr = PointCloudT();
             string file_name = std::string(dir_path) + file;
             std::cout << "Reading file: " << file_name << std::endl;
             readSubmapFile(file_name, submap_ptr);
+            
             // Update swath counter
-            euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
+            euler = submap_ptr.sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
+            
             if(abs(euler[2] - prev_direction) > M_PI/2 /*&& euler[0]>0.0001*/){
                 swath_cnt = swath_cnt + 1;
                 prev_direction = euler[2];
             }
-            SubmapObj submap_i(submap_cnt, swath_cnt, *submap_ptr, dr_noise);
+            
+            SubmapObj submap_i(submap_cnt, swath_cnt, submap_ptr, dr_noise);
 
             // Add AUV track to submap object
             submap_i.auv_tracks_.conservativeResize(submap_i.auv_tracks_.rows()+1, 3);
             submap_i.auv_tracks_.row(0) = submap_i.submap_tf_.translation().transpose().cast<double>();
             submaps_set.push_back(submap_i);
             submap_cnt ++;
+            
          }
     }
+
     return submaps_set;
 }
 

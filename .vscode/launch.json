@@ -2,18 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "bathymetric_slam Debug",
+            "name": "(gdb) 启动",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/home/link/bathymetric_slam/bin/bathy_slam_real",
-            //"args": ["--simulation","no ", "--bathy_survey","/home/link/sim_data/Pipeline/pipeline.cereal","--config","../config.yaml"],
-            //"args": ["--simulation","yes", "--bathy_survey","../sim_data/map_small/","--config","../config.yaml"],
-            "args": ["--simulation","yes", "--bathy_survey","/home/link/sim_data/mbes/","--config","../config.yaml"],
-            //"args": ["--simulation","yes", "--bathy_survey","/home/link/sim_data/Pipeline/mebs_pings/","--config","../config.yaml"],
+            "program": "/home/u/code_workplace/cpp/bathymetric_slam/bin/bathy_slam_real",
+            "args": [
+                    "--simulation","yes", 
+                    "--bathy_survey","../sim_data/map_small/",
+                    "--config","../config.yaml"
+                ],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/build",
             "environment": [],
-            "externalConsole": true,
+            "externalConsole": false,
             "MIMode": "gdb",
             "setupCommands": [
                 {
@@ -27,8 +28,10 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "make install",
+            "preLaunchTask": "Build"
         }
+
+        
 
     ]
 }

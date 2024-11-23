@@ -107,7 +107,9 @@ void load(Archive & archive,
 
 typedef std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> SubmapsVec;
 
-void readSubmapFile(const string submap_str, PointCloudT::Ptr submap_pcl);
+
+//修改
+void readSubmapFile(const string submap_str, PointCloudT submap_pcl);
 
 std::vector<std::string> checkFilesInDir(DIR *dir);
 

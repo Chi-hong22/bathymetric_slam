@@ -19,7 +19,7 @@ endif()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -O3 -fPIC")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set( CMAKE_BUILD_TYPE "Release" )
+#set( CMAKE_BUILD_TYPE "Release" )
 
 # Must use GNUInstallDirs to install libraries into correct
 # locations on all platforms.
@@ -38,7 +38,6 @@ find_package(Boost REQUIRED COMPONENTS date_time)
 
 # AUVLIB stuff
 #  find_package(LIBIGL REQUIRED QUIET)
-# set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "/home/u/code_workplace/cpp/external/auvlib/build/src/libxtf")
 find_package(LibXTF REQUIRED)
 find_package(LibGSF REQUIRED)
 find_package(EigenCereal REQUIRED)

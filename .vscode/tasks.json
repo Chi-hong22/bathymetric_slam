@@ -1,12 +1,12 @@
-{   "version": "2.0.0",
+{
+    "version": "2.0.0",
     "tasks": [
         {
-            "label": "cmake",
+            "label": "CMake",
             "type": "shell",
             "command": "cmake",
             "args": [
-                "-DCMAKE_BUILD_TYPE=Debug",
-                "-DCMAKE_INSTALL_PREFIX=../install",
+                "-g",
                 ".."
             ],
             "options": {
@@ -15,25 +15,17 @@
             "problemMatcher": []
         },
         {
-            "label": "TRICP Build",
-            "type": "shell",
-            "command": "make",
-            "options": {
-                "cwd": "${workspaceFolder}/build"
-            },
-            "dependsOn": "cmake"
-        },
-        {
-            "label": "make install",
+            "label": "Build",
             "type": "shell",
             "command": "make",
             "args": [
-                "install"
+                "-j4"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/build"
             },
-            "dependsOn": "TRICP Build"
+            "dependsOn": "CMake",
+            "problemMatcher": []
         }
-    ],
+    ]
 }

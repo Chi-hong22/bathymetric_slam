@@ -3,7 +3,9 @@ project(slam_ws_apps)
 
 # 设置编译选项
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/)
-
+set(CMAKE_BUILD_TYPE "Debug")
+add_definitions("-Wall -g")
+set(CMAKE_CXX_FLAGS_DEBUG "-Wall -g -pthread -DPCL_NO_PRECOMPILE=ON")
 # 查找所有依赖包
 find_package(PCL REQUIRED)
 find_package(VTK REQUIRED COMPONENTS 
@@ -21,18 +23,20 @@ add_definitions(${PCL_DEFINITIONS})
 include_directories(include
     ${PCL_INCLUDE_DIRS}
     ${VTK_INCLUDE_DIRS}
+    /home/u/code_workplace/cpp/bathymetric_slam/src/submaps_tools/include
 )
 
 ## APPS
 # bathy_slam_real
 add_executable(bathy_slam_real
     src/test_slam_real.cpp
+    /home/u/code_workplace/cpp/bathymetric_slam/src/submaps_tools/src/submaps.cpp
 )
 
 target_link_libraries(bathy_slam_real
     gicp_registration
     utils_g2o
-    submaps_tools
+    #submaps_tools
     graph_construction
     ceres_optimizer
     read_g2o

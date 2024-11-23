@@ -50,6 +50,7 @@ void add_benchmark(SubmapsVec& submaps, benchmark::track_error_benchmark& benchm
     PointsT map = pclToMatrixSubmap(submaps);
     PointsT track = trackToMatrixSubmap(submaps);
     if (is_groundtruth) {
+        std::cout << map[0].rows() << "      " << map[0].cols()  <<std::endl;
         benchmark.add_ground_truth(map, track);
     } else {
         benchmark.add_benchmark(map, track, name);
@@ -125,7 +126,7 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void*
 }
 
 int main(int argc, char** argv){
-    // Inputs
+    // 数据加载
     std::string folder_str, path_str, output_str, simulation, config_path;
     cxxopts::Options options("MyProgram", "One line description of MyProgram");
     options.add_options()
@@ -156,7 +157,8 @@ int main(int argc, char** argv){
 
     SubmapsVec submaps_gt, submaps_reg;
     if(simulation == "yes"){
-        submaps_gt = readSubmapsInDir(submaps_path.string(), dr_noise);
+        auto a = submaps_path.string();
+        submaps_gt = readSubmapsInDir(a, dr_noise);
     }
     else{
         std_data::mbes_ping::PingsT std_pings = std_data::read_data<std_data::mbes_ping::PingsT>(submaps_path);
