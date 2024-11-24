@@ -31,7 +31,7 @@ include(GNUInstallDirs)
 
 find_package(Ceres 2.1.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(PCL 1.10 REQUIRED)
+find_package(PCL 1.14.0 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(g2o REQUIRED)
 find_package(yaml-cpp)
