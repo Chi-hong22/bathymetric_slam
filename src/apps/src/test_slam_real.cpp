@@ -126,17 +126,34 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void*
 }
 
 int main(int argc, char** argv){
-    // 数据加载
-    std::string folder_str, path_str, output_str, simulation, config_path;
-    cxxopts::Options options("MyProgram", "One line description of MyProgram");
-    options.add_options()
-        ("help", "Print help")
-        ("simulation", "Simulation data from Gazebo", cxxopts::value(simulation))
-        ("bathy_survey", "Input MBES pings in cereal file if simulation = no. If in simulation"
-                          "input path to map_small folder", cxxopts::value(path_str))
-        ("config", "YAML config file", cxxopts::value(config_path));
+    // 1. 配置与数据加载阶段
+    // 1.1 解析命令行参数
 
+    // 定义字符串变量，用于存储命令行参数
+    std::string folder_str, path_str, output_str, simulation, config_path;
+    // 创建cxxopts::Options对象，用于解析命令行参数
+    // 参数包括程序名称和简短描述
+    cxxopts::Options options("MyProgram", "One line description of MyProgram");
+
+    // 添加命令行参数选项
+    options.add_options()
+        // 添加help选项，用于打印帮助信息
+        ("help", "Print help")
+        // 添加simulation选项，用于指定是否使用Gazebo模拟数据
+        ("simulation", "Simulation data from Gazebo", cxxopts::value(simulation))
+        // 添加bathy_survey选项，根据是否使用模拟数据，指定不同的输入路径
+        // 如果不使用模拟数据，则输入MBES pings的cereal文件路径
+        // 如果在模拟环境中，则输入map_small文件夹的路径
+        ("bathy_survey", "Input MBES pings in cereal file if simulation = no. If in simulation"
+                        "input path to map_small folder", cxxopts::value(path_str))
+        // 添加config选项，用于指定YAML配置文件的路径
+        ("config", "YAML config file", cxxopts::value(config_path));
+    // 解析命令行参数
+    // argc 是命令行参数的个数
+    // argv 是一个包含命令行参数的字符数组
+    // 返回值 result 表示解析的结果
     auto result = options.parse(argc, argv);
+
     if (result.count("help")) {
         cout << options.help({ "", "Group" }) << endl;
         exit(0);
@@ -144,23 +161,38 @@ int main(int argc, char** argv){
     if(output_str.empty()){
         output_str = "output_cereal.cereal";
     }
+
     boost::filesystem::path output_path(output_str);
     string outFilename = "graph_corrupted.g2o";   // G2O output file
 
+    // 1.2 加载配置文件
     YAML::Node config = YAML::LoadFile(config_path);
     std::cout << "Config file: " << config_path << std::endl;
     DRNoise dr_noise = loadDRNoiseFromFile(config);
 
-    // Parse submaps from cereal file
+    // 解析来自cereal文件的子地图
+    // 使用给定的路径字符串创建一个boost::filesystem::path对象，用于处理子地图文件
     boost::filesystem::path submaps_path(path_str);
+    // 输出输入数据的路径，用于调试和确认
     std::cout << "Input data " << submaps_path << std::endl;
 
+    // 1.3 读取子图数据
+    // 定义两个SubmapsVec类型的变量submaps_gt和submaps_reg
+    // submaps_gt用于存储地面真值的子地图集合
+    // submaps_reg用于存储注册或配准后的子地图集合
     SubmapsVec submaps_gt, submaps_reg;
+    
+    // 根据是否为仿真数据选择不同的加载方式
     if(simulation == "yes"){
-        auto a = submaps_path.string();
-        submaps_gt = readSubmapsInDir(a, dr_noise);
+        // 加载仿真数据
+        auto path_temp = submaps_path.string();
+        submaps_gt = readSubmapsInDir(path_temp, dr_noise);
     }
     else{
+        // 加载实际声呐数据并进行预处理
+        // - 解析ping数据
+        // - 创建子图
+        // - 点云降采样
         std_data::mbes_ping::PingsT std_pings = std_data::read_data<std_data::mbes_ping::PingsT>(submaps_path);
         std::cout << "Number of pings in survey " << std_pings.size() << std::endl;
         {
@@ -172,9 +204,9 @@ int main(int argc, char** argv){
             PointCloudT::Ptr cloud_ptr (new PointCloudT);
             pcl::VoxelGrid<PointT> voxel_grid_filter;
             voxel_grid_filter.setInputCloud (cloud_ptr);
-            voxel_grid_filter.setLeafSize(config["downsampling_leaf_x"].as<double>(),
-                                          config["downsampling_leaf_y"].as<double>(),
-                                          config["downsampling_leaf_z"].as<double>());
+            voxel_grid_filter.setLeafSize ( config["downsampling_leaf_x"].as<double>(),
+                                            config["downsampling_leaf_y"].as<double>(),
+                                            config["downsampling_leaf_z"].as<double>());
             for(SubmapObj& submap_i: submaps_gt){
                 *cloud_ptr = submap_i.submap_pcl_;
                 voxel_grid_filter.setInputCloud(cloud_ptr);
@@ -192,79 +224,93 @@ int main(int argc, char** argv){
     if(boost::filesystem::is_directory(folder)) {
         covs_lc = readCovsFromFiles(folder);
     }
+
+    // 2. 图构建与优化准备阶段
+    // 2.1 初始化图构造器
     GraphConstructor graph_obj(covs_lc);
 
-    // Noise generators
+    // 2.2 初始化噪声生成器
     GaussianGen transSampler, rotSampler;
     Matrix<double, 6,6> information = generateGaussianNoise(transSampler, rotSampler);
 
     // flag for adding gaussian noise to submaps and graph
     bool add_gaussian_noise = config["add_gaussian_noise"].as<bool>();
-    
+    // 2.3 设置基准测试工具
     benchmark::track_error_benchmark benchmark("real_data", config["benchmark_nbr_rows"].as<int>(), config["benchmark_nbr_cols"].as<int>());
     std::cout << "Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
 
-#if VISUAL != 1
-    benchmark_gt(submaps_gt, benchmark);
-    submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
-    add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
-    add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
+    // 3. SLAM处理主循环（非可视化模式）
+    #if VISUAL != 1
+        // 3.1 对原始数据进行基准测试
+        benchmark_gt(submaps_gt, benchmark);
+        // 3.2 构建水下地形图并进行GICP配准
+        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+        add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
+        add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
+        add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
+        // 3.3 创建并优化位姿图
+        create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
+        add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
+        add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
+        // 3.4 图优化与结果输出
+        optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
+        add_benchmark(submaps_reg, benchmark, "6_optimized");
+    #endif
 
-    add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
-    create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
-    add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
+    // 4. 可视化处理（可视化模式）
+    #if VISUAL == 1
+        // 4.1 初始化可视化器
+        PCLVisualizer viewer ("Submaps viewer");
 
-    add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
-    optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
-    add_benchmark(submaps_reg, benchmark, "6_optimized");
-#endif
+        // 4.2 交互式处理循环
+        // - 显示原始数据
+        // - GICP配准结果展示
+        // - 图优化结果展示
+        // - 实时更新可视化
+        viewer.registerKeyboardCallback(&keyboardEventOccurred, (void*) NULL);
+        viewer.loadCameraParameters("Antarctica7");
+        SubmapsVisualizer* visualizer = new SubmapsVisualizer(viewer);
+        visualizer->setVisualizer(submaps_gt, 1);
 
-    // Visualization
-#if VISUAL == 1
-    PCLVisualizer viewer ("Submaps viewer");
-    viewer.registerKeyboardCallback(&keyboardEventOccurred, (void*) NULL);
-    viewer.loadCameraParameters("Antarctica7");
-    SubmapsVisualizer* visualizer = new SubmapsVisualizer(viewer);
-    visualizer->setVisualizer(submaps_gt, 1);
-
-    while (!viewer.wasStopped()) {
-        viewer.spinOnce();
-        if (next_step) {
-            next_step = false;
-            switch (current_step)
-            {
-            case 1:
-                // Benchmark GT
-                benchmark_gt(submaps_gt, benchmark);
-                submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
-                visualizer->updateVisualizer(submaps_reg);
-                // Benchmark GT after GICP, the GT submaps have now been moved due to GICP registration
-                add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
-                add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
-                break;
-            case 2:
-                add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
-                create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
-                visualizer->plotPoseGraphG2O(graph_obj, submaps_reg);
-                // Benchmark corrupted (or not corrupted if add_gaussian_noise = false)
-                add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
-                break;
-            case 3:
-                add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
-                optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
-                // Visualize Ceres output
-                visualizer->plotPoseGraphCeres(submaps_reg);
-                // Benchmark Optimized
-                add_benchmark(submaps_reg, benchmark, "6_optimized");
-                break;
-            default:
-                break;
+        while (!viewer.wasStopped()) {
+            viewer.spinOnce();
+            if (next_step) {
+                next_step = false;
+                switch (current_step)
+                {
+                case 1:
+                    // Benchmark GT
+                    benchmark_gt(submaps_gt, benchmark);
+                    submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+                    visualizer->updateVisualizer(submaps_reg);
+                    // Benchmark GT after GICP, the GT submaps have now been moved due to GICP registration
+                    add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
+                    add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
+                    break;
+                case 2:
+                    add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
+                    create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
+                    visualizer->plotPoseGraphG2O(graph_obj, submaps_reg);
+                    // Benchmark corrupted (or not corrupted if add_gaussian_noise = false)
+                    add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
+                    break;
+                case 3:
+                    add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
+                    optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
+                    // Visualize Ceres output
+                    visualizer->plotPoseGraphCeres(submaps_reg);
+                    // Benchmark Optimized
+                    add_benchmark(submaps_reg, benchmark, "6_optimized");
+                    break;
+                default:
+                    break;
+                }
             }
         }
-    }
-    delete(visualizer);
-    print_benchmark_results(submaps_reg, benchmark);
-#endif
+        delete(visualizer);
+        // 4.3 输出最终结果
+        print_benchmark_results(submaps_reg, benchmark);
+    #endif
 
     return 0;
 }
