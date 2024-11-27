@@ -178,10 +178,10 @@ bool pointToLine(const Vector3d seg_a, const Vector3d seg_b, const Vector3d poin
  * 此函数尝试从指定的文件路径加载点云数据到给定的点云对象中
  * 如果文件无法读取，将输出错误信息
  */
-void readSubmapFile(const std::string& submap_str, PointCloudT& submap_pcl){
+void readSubmapFile(const string submap_str, PointCloudT::Ptr submap_pcl){
     // 尝试从给定路径加载点云数据到submap_pcl对象中
     // 如果加载失败，输出错误信息
-    if (pcl::io::loadPCDFile<pcl::PointXYZ> (submap_str, submap_pcl) == -1){
+    if (pcl::io::loadPCDFile<pcl::PointXYZ> (submap_str, *submap_pcl) == -1){
         PCL_ERROR ("Couldn't read .pcd file \n");
     }
 }
@@ -201,7 +201,6 @@ std::vector<std::string> checkFilesInDir(DIR *dir){
     return files;
 }
 
-
 /**
  * 从指定目录读取并处理子图文件。
  * 
@@ -213,79 +212,133 @@ std::vector<std::string> checkFilesInDir(DIR *dir){
  * @param dr_noise 用于子图处理的航位推算噪声模型。
  * @return 包含处理后子图对象的向量。
  */
-std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(const string& dir_path, const DRNoise& dr_noise){
-
-    // 初始化一个向量用于存储子图对象，使用Eigen类型的对齐分配器
+std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(const std::string& dir_path, const DRNoise& dr_noise) {
     std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> submaps_set;
-    DIR *dir;
-    
-    // 尝试打开目录
+    DIR* dir;
     if ((dir = opendir(dir_path.c_str())) != NULL) {
-        
-        // 检查目录中的文件并返回排序后的文件名列表
-        // 参数: dir - 需要检查的目录路径
-        // 返回值: 包含目录中文件名的字符串向量
+        // 打开目录并获取所有文件名
         std::vector<std::string> files = checkFilesInDir(dir);
-        // 对文件名列表进行排序
+
+        // 按照文件名中的数字部分进行排序
         std::sort(files.begin(), files.end());
-        
-        // 遍历目录中的每个文件
-        int submap_cnt = 0;// 初始化子地图计数器为0
-        int swath_cnt = 0;// 初始化条带计数器为0
-        double prev_direction = 0;// 初始化前一个方向变量为0
-        Eigen::Vector3f euler;// 声明一个Eigen::Vector3f类型的euler变量，用于存储欧拉角
-        for(const std::string file: files){
-            // 初始化一个点云对象用于子图
-            PointCloudT submap_ptr = PointCloudT();
-            // 构建文件的完整路径
-            string file_name = std::string(dir_path) + file;
+
+        PointCloudT::Ptr submap_ptr(new PointCloudT);
+        int submap_cnt = 0;
+        int swath_cnt = 0;
+        double prev_direction = 0;
+        Eigen::Vector3f euler;
+
+        for (const std::string& file : files) {
+            std::string file_name = dir_path + file;
             std::cout << "Reading file: " << file_name << std::endl;
-            // 从子图文件中读取数据到点云对象
             readSubmapFile(file_name, submap_ptr);
             
-            // 更新条带计数器
-            euler = submap_ptr.sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
-            
-            // 如果方向变化显著，增加条带计数
-            if(abs(euler[2] - prev_direction) > M_PI/2 /*&& euler[0]>0.0001*/){
-                swath_cnt = swath_cnt + 1;
+            // 更新 swath 计数器
+            euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
+            if (abs(euler[2] - prev_direction) > M_PI / 2) {
+                swath_cnt++;
                 prev_direction = euler[2];
             }
-            
-            // 创建一个子图对象，包含当前的子图和条带索引，并将其添加到集合中
-            SubmapObj submap_i(submap_cnt, swath_cnt, submap_ptr, dr_noise);
 
-            // 添加AUV轨迹到子图对象
-            submap_i.auv_tracks_.conservativeResize(submap_i.auv_tracks_.rows()+1, 3);
+            SubmapObj submap_i(submap_cnt, swath_cnt, *submap_ptr, dr_noise);
+
+            // 将 AUV 轨迹添加到子地图对象
+            submap_i.auv_tracks_.conservativeResize(submap_i.auv_tracks_.rows() + 1, 3);
             submap_i.auv_tracks_.row(0) = submap_i.submap_tf_.translation().transpose().cast<double>();
             submaps_set.push_back(submap_i);
-            submap_cnt ++;
-            
+            submap_cnt++;
         }
     }
-    // 返回处理后的子图集合
     return submaps_set;
 }
+// std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(const string& dir_path, const DRNoise& dr_noise){
+
+//     // 初始化一个向量用于存储子图对象，使用Eigen类型的对齐分配器
+//     std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> submaps_set;
+//     DIR *dir;
+    
+//     // 尝试打开目录
+//     if ((dir = opendir(dir_path.c_str())) != NULL) {
+        
+//         // 检查目录中的文件并返回排序后的文件名列表
+//         // 参数: dir - 需要检查的目录路径
+//         // 返回值: 包含目录中文件名的字符串向量
+//         std::vector<std::string> files = checkFilesInDir(dir);
+//         // 对文件名列表进行排序
+//         std::sort(files.begin(), files.end());
+        
+//         // 创建并初始化一个指向PointCloudT类型智能指针的实例
+//         // 这里使用智能指针是为了方便管理和传递点云数据，避免内存泄漏
+//         PointCloudT::Ptr submap_ptr(new PointCloudT);
+//         // 遍历目录中的每个文件
+//         int submap_cnt = 0;// 初始化子地图计数器为0
+//         int swath_cnt = 0;// 初始化条带计数器为0
+//         double prev_direction = 0;// 初始化前一个方向变量为0
+//         Eigen::Vector3f euler;// 声明一个Eigen::Vector3f类型的euler变量，用于存储欧拉角
+
+//         for(const std::string file: files){
+//             // 初始化一个点云对象用于子图
+//             // PointCloudT submap_ptr = PointCloudT();
+
+//             // 构建文件的完整路径
+//             string file_name = std::string(dir_path) + file;
+//             std::cout << "Reading file: " << file_name << std::endl;
+//             // 从子图文件中读取数据到点云对象
+//             readSubmapFile(file_name, submap_ptr);
+            
+//             // 更新条带计数器
+//             // euler = submap_ptr.sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
+//             euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
+//             // 如果方向变化显著，增加条带计数
+//             if(abs(euler[2] - prev_direction) > M_PI/2 /*&& euler[0]>0.0001*/){
+//                 swath_cnt = swath_cnt + 1;
+//                 prev_direction = euler[2];
+//             }
+            
+//             // 创建一个子图对象，包含当前的子图和条带索引，并将其添加到集合中
+//             SubmapObj submap_i(submap_cnt, swath_cnt, submap_ptr, dr_noise);
+
+//             // 添加AUV轨迹到子图对象
+//             submap_i.auv_tracks_.conservativeResize(submap_i.auv_tracks_.rows()+1, 3);
+//             submap_i.auv_tracks_.row(0) = submap_i.submap_tf_.translation().transpose().cast<double>();
+//             submaps_set.push_back(submap_i);
+//             submap_cnt ++;
+            
+//         }
+//     }
+//     // 返回处理后的子图集合
+//     return submaps_set;
+// }
 
 
-PointsT pclToMatrixSubmap(const SubmapsVec& submaps_set){
-
+PointsT pclToMatrixSubmap(const SubmapsVec& submaps_set) {
     PointsT submaps;
-    for(const SubmapObj& submap: submaps_set){
-        Eigen::MatrixXf points_submap_i = submap.submap_pcl_.getMatrixXfMap(3,4,0).transpose();
+    int iteration_count = 0; // 计数器
+    for (const SubmapObj& submap : submaps_set) {
+        iteration_count++; // 每次迭代增加计数器
+        if (submap.submap_pcl_.empty()) {
+            std::cerr << "Warning: submap point cloud is empty for submap id " << submap.submap_id_ << std::endl;
+            continue;
+        }
+        Eigen::MatrixXf points_submap_i = submap.submap_pcl_.getMatrixXfMap(3, 4, 0).transpose();
         submaps.push_back(points_submap_i.cast<double>());
     }
-
+    std::cout << "pclToMatrixSubmap iterated " << iteration_count << " times." << std::endl; // 输出迭代次数
     return submaps;
 }
 
-PointsT trackToMatrixSubmap(const SubmapsVec& submaps_set){
-
+PointsT trackToMatrixSubmap(const SubmapsVec& submaps_set) {
     PointsT tracks;
-    for(const SubmapObj& submap: submaps_set){
+    int iteration_count = 0; // 计数器
+    for (const SubmapObj& submap : submaps_set) {
+        iteration_count++; // 每次迭代增加计数器
+        if (submap.auv_tracks_.rows() == 0) {
+            std::cerr << "Warning: AUV tracks are empty for submap id " << submap.submap_id_ << std::endl;
+            continue;
+        }
         tracks.push_back(submap.auv_tracks_);
     }
-
+    std::cout << "trackToMatrixSubmap iterated " << iteration_count << " times." << std::endl; // 输出迭代次数
     return tracks;
 }
 

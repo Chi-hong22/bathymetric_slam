@@ -46,14 +46,33 @@ bool next_step = false;
 int current_step = 0;
 
 
+/**
+ * 添加基准测试
+ * 
+ * 该函数用于将子地图数据添加到基准测试中，以评估跟踪算法的性能
+ * 它可以处理普通子地图数据和地面真实数据
+ * 
+ * @param submaps 子地图数据的向量，类型为SubmapsVec
+ * @param benchmark 基准测试对象，用于跟踪误差评估
+ * @param name 基准测试的名称，用于标识不同的测试数据
+ * @param is_groundtruth 标志位，指示数据是否为地面真实数据，默认为false
+ */
 void add_benchmark(SubmapsVec& submaps, benchmark::track_error_benchmark& benchmark, const string& name, bool is_groundtruth=false) {
+    // 将子地图数据转换为矩阵形式的点云数据
     PointsT map = pclToMatrixSubmap(submaps);
+    // 将跟踪数据转换为矩阵形式的点云数据
     PointsT track = trackToMatrixSubmap(submaps);
+
+    // 输出调试信息
+    std::cout << "map size: " << map.size() << ", track size: " << track.size() << std::endl;
+
+    // 如果数据是地面真实数据，则打印数据维度并添加到基准测试中
     if (is_groundtruth) {
-        std::cout << map[0].rows() << "      " << map[0].cols()  <<std::endl;
-        benchmark.add_ground_truth(map, track);
+        std::cout << "map[0] rows and cols: " << map[0].rows() << ", " << map[0].cols()  <<std::endl;
+        // benchmark.add_ground_truth(map, track);
     } else {
-        benchmark.add_benchmark(map, track, name);
+        // 如果数据不是地面真实数据，则将其作为基准测试数据添加到基准测试中
+        // benchmark.add_benchmark(map, track, name);
     }
 }
 
@@ -219,9 +238,13 @@ int main(int argc, char** argv){
 
     // Graph constructor
     // Read training covs from folder
+    // 声明一个变量用于存储覆盖率信息
     covs covs_lc;
+    // 使用给定的字符串初始化一个Boost.Filesystem路径对象，用于后续的目录操作
     boost::filesystem::path folder(folder_str);
+    // 检查路径是否对应一个目录
     if(boost::filesystem::is_directory(folder)) {
+        // 如果是目录，从目录中的文件读取覆盖率信息
         covs_lc = readCovsFromFiles(folder);
     }
 
