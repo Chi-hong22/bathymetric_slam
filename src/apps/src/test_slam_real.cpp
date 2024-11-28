@@ -69,10 +69,10 @@ void add_benchmark(SubmapsVec& submaps, benchmark::track_error_benchmark& benchm
     // 如果数据是地面真实数据，则打印数据维度并添加到基准测试中
     if (is_groundtruth) {
         std::cout << "map[0] rows and cols: " << map[0].rows() << ", " << map[0].cols()  <<std::endl;
-        // benchmark.add_ground_truth(map, track);
+        benchmark.add_ground_truth(map, track);
     } else {
         // 如果数据不是地面真实数据，则将其作为基准测试数据添加到基准测试中
-        // benchmark.add_benchmark(map, track, name);
+        benchmark.add_benchmark(map, track, name);
     }
 }
 

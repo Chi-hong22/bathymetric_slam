@@ -22,6 +22,7 @@ find_package(yaml-cpp)
 find_package(Boost REQUIRED COMPONENTS date_time)
 
 # AUVLIB相关依赖
+# set(CMAKE_PREFIX_PATH "/home/u/code_workplace/cpp/external/auvlib/install" ${CMAKE_PREFIX_PATH})
 # find_package(LIBIGL REQUIRED QUIET)
 find_package(LibXTF REQUIRED)
 find_package(LibGSF REQUIRED)
@@ -30,7 +31,6 @@ find_package(DataTools REQUIRED)
 find_package(SonarTracing REQUIRED)
 find_package(AuvlibGlad REQUIRED)
 find_package(BathyMaps REQUIRED)
-
 
 include_directories(
     # 项目内部头文件
@@ -47,6 +47,7 @@ include_directories(
     ${G2O_INCLUDE_DIRS} 
     ${OPENCV_INCLUDE_DIRS}
     ${yaml_cpp_INCLUDE_DIRS}
+    ${_IMPORT_PREFIX}/include
 ) 
 
 
@@ -94,15 +95,12 @@ set(THRIDPARTY_LIB
     std_data
     navi_data
     data_transforms
-
+    benchmark
     ${G2O_LIBS}
     ceres
     ${GFLAGS_LIBRARIES}
-
-    benchmark
     ${YAML_CPP_LIBRARIES}
     ${PCL_LIBRARIES}
-
 )
 
 
@@ -114,7 +112,6 @@ add_executable(bathy_slam_real
 
 # 链接依赖库
 target_link_libraries(bathy_slam_real
-
     ${THRIDPARTY_LIB}
 )
 
