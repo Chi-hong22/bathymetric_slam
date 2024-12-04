@@ -6,16 +6,16 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "/home/u/code_workplace/cpp/bathymetric_slam/bin/bathy_slam_real",
-            "args": [
-                    "--simulation","yes", 
-                    "--bathy_survey","../sim_data/map_small/",
-                    "--config","../config.yaml"
-                ],
             // "args": [
             //         "--simulation","yes", 
-            //         "--bathy_survey","../sim_data/vvv/",
+            //         "--bathy_survey","../sim_data/map_small/",
             //         "--config","../config.yaml"
             //     ],
+            "args": [
+                    "--simulation","yes", 
+                    "--bathy_survey","../sim_data/vvv/",
+                    "--config","../config.yaml"
+                ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [],

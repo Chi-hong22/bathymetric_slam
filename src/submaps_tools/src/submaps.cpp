@@ -186,6 +186,52 @@ void readSubmapFile(const string submap_str, PointCloudT::Ptr submap_pcl){
     }
 }
 
+/**
+ * 将PCD文件转换为TXT文件
+ * 
+ * @param input_pcd_file 输入PCD文件的路径
+ * @param output_txt_file 输出TXT文件的路径
+ * @return true 如果转换成功，否则返回 false
+ */
+bool convertPCDToTXT(const std::string& input_pcd_file, const std::string& output_txt_file)
+{
+    // 创建点云存储对象
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    
+    // 读取PCD文件
+    if (pcl::io::loadPCDFile<pcl::PointXYZ>(input_pcd_file, *cloud) == -1)
+    {
+        PCL_ERROR("Couldn't read file %s \n", input_pcd_file.c_str());
+        return false;
+    }
+    
+    // 打开或创建一个.txt文件
+    std::ofstream outfile(output_txt_file);
+    
+    if (!outfile.is_open())
+    {
+        std::cerr << "Error opening output file: " << output_txt_file << std::endl;
+        return false;
+    }
+    
+    // 遍历点云中的每个点，并写入.txt文件
+    for (const auto& point : *cloud)
+    {
+        if (!(outfile << point.x << " " << point.y << " " << point.z << std::endl))
+        {
+            std::cerr << "Error writing to output file: " << output_txt_file << std::endl;
+            outfile.close();
+            return false;
+        }
+    }
+    
+    // 关闭文件
+    outfile.close();
+    
+    std::cout << "Successfully converted " << input_pcd_file << " to " << output_txt_file << std::endl;
+    
+    return true;
+}
 
 std::vector<std::string> checkFilesInDir(DIR *dir){
     // Check files and directories within directory
@@ -251,65 +297,6 @@ std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(con
     }
     return submaps_set;
 }
-// std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(const string& dir_path, const DRNoise& dr_noise){
-
-//     // 初始化一个向量用于存储子图对象，使用Eigen类型的对齐分配器
-//     std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> submaps_set;
-//     DIR *dir;
-    
-//     // 尝试打开目录
-//     if ((dir = opendir(dir_path.c_str())) != NULL) {
-        
-//         // 检查目录中的文件并返回排序后的文件名列表
-//         // 参数: dir - 需要检查的目录路径
-//         // 返回值: 包含目录中文件名的字符串向量
-//         std::vector<std::string> files = checkFilesInDir(dir);
-//         // 对文件名列表进行排序
-//         std::sort(files.begin(), files.end());
-        
-//         // 创建并初始化一个指向PointCloudT类型智能指针的实例
-//         // 这里使用智能指针是为了方便管理和传递点云数据，避免内存泄漏
-//         PointCloudT::Ptr submap_ptr(new PointCloudT);
-//         // 遍历目录中的每个文件
-//         int submap_cnt = 0;// 初始化子地图计数器为0
-//         int swath_cnt = 0;// 初始化条带计数器为0
-//         double prev_direction = 0;// 初始化前一个方向变量为0
-//         Eigen::Vector3f euler;// 声明一个Eigen::Vector3f类型的euler变量，用于存储欧拉角
-
-//         for(const std::string file: files){
-//             // 初始化一个点云对象用于子图
-//             // PointCloudT submap_ptr = PointCloudT();
-
-//             // 构建文件的完整路径
-//             string file_name = std::string(dir_path) + file;
-//             std::cout << "Reading file: " << file_name << std::endl;
-//             // 从子图文件中读取数据到点云对象
-//             readSubmapFile(file_name, submap_ptr);
-            
-//             // 更新条带计数器
-//             // euler = submap_ptr.sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
-//             euler = submap_ptr->sensor_orientation_.toRotationMatrix().eulerAngles(2, 1, 0);
-//             // 如果方向变化显著，增加条带计数
-//             if(abs(euler[2] - prev_direction) > M_PI/2 /*&& euler[0]>0.0001*/){
-//                 swath_cnt = swath_cnt + 1;
-//                 prev_direction = euler[2];
-//             }
-            
-//             // 创建一个子图对象，包含当前的子图和条带索引，并将其添加到集合中
-//             SubmapObj submap_i(submap_cnt, swath_cnt, submap_ptr, dr_noise);
-
-//             // 添加AUV轨迹到子图对象
-//             submap_i.auv_tracks_.conservativeResize(submap_i.auv_tracks_.rows()+1, 3);
-//             submap_i.auv_tracks_.row(0) = submap_i.submap_tf_.translation().transpose().cast<double>();
-//             submaps_set.push_back(submap_i);
-//             submap_cnt ++;
-            
-//         }
-//     }
-//     // 返回处理后的子图集合
-//     return submaps_set;
-// }
-
 
 PointsT pclToMatrixSubmap(const SubmapsVec& submaps_set) {
     PointsT submaps;

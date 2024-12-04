@@ -90,24 +90,29 @@ GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config) {
     SubmapRegistration gicp_reg(config);
 
     // Create SLAM solver and run offline
-    std::cout << "Building bathymetric graph with GICP submap registration" << std::endl;
+    // std::cout << "Building bathymetric graph with GICP submap registration" << std::endl;
+    std::cout << "正在使用 GICP 子图注册构建水深图" << std::endl;
     BathySlam slam_solver(graph_obj, gicp_reg);
     SubmapsVec submaps_reg = slam_solver.runOffline(submaps_gt, transSampler, rotSampler, config);
-    std::cout << "Done building graph, press space to continue" << std::endl;
+    // std::cout << "Done building graph, press space to continue" << std::endl;
+    std::cout << "已完成构建图，按空格键继续" << std::endl;
     return submaps_reg;
 }
 
 // Create initial graph estimates, optionally add gaussian noise if add_gaussian_noise = true
 void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, GaussianGen& transSampler, GaussianGen& rotSampler, bool add_gaussian_noise) {
-    std::cout << "Add gaussian noise = " << add_gaussian_noise << std::endl;
+    // std::cout << "Add gaussian noise = " << add_gaussian_noise << std::endl;
+    std::cout << "添加高斯噪声 = " << add_gaussian_noise << std::endl;
     if (add_gaussian_noise) {
         // Add noise to edges on the graph
         graph_obj.addNoiseToGraph(transSampler, rotSampler);
-        std::cout << "Gaussian noise added to graph" << std::endl;
+        // std::cout << "Gaussian noise added to graph" << std::endl;
+        std::cout << "已向图中添加高斯噪声" << std::endl;
     }
     // Create initial DR chain and visualize
     graph_obj.createInitialEstimate(submaps_reg);
-    std::cout << "Initial graph estimate constructed, press space to continue" << std::endl;
+    // std::cout << "Initial graph estimate constructed, press space to continue" << std::endl;
+    std::cout << "初始图估计已构建，按空格键继续" << std::endl;
 
 }
 
@@ -119,14 +124,16 @@ void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::s
     google::InitGoogleLogging(argv0);
     ceres_::optimizer::MapOfPoses poses = ceres_::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
     ceres_::optimizer::updateSubmapsCeres(poses, submaps_reg);
-    std::cout << "Output cereal: " << boost::filesystem::basename(output_path) << std::endl;
+    // std::cout << "Output cereal: " << boost::filesystem::basename(output_path) << std::endl;
+    std::cout << "输出 cereal: " << boost::filesystem::basename(output_path) << std::endl;
     std::ofstream os(boost::filesystem::basename(output_path) + ".cereal", std::ofstream::binary);
     {
         cereal::BinaryOutputArchive oarchive(os);
         oarchive(submaps_reg);
         os.close();
     }
-    std::cout << "Graph optimized, press space to continue" << std::endl;
+    // std::cout << "Graph optimized, press space to continue" << std::endl;
+    std::cout << "图已优化，按空格键继续" << std::endl;
 }
 
 void print_benchmark_results(SubmapsVec& submaps_reg, benchmark::track_error_benchmark& benchmark) {
@@ -264,20 +271,20 @@ int main(int argc, char** argv){
 
     // 3. SLAM处理主循环（非可视化模式）
     #if VISUAL != 1
-        // 3.1 对原始数据进行基准测试
-        benchmark_gt(submaps_gt, benchmark);
+        // // 3.1 对原始数据进行基准测试
+        // benchmark_gt(submaps_gt, benchmark);
         // 3.2 构建水下地形图并进行GICP配准
         submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
-        add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
-        add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
-        add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
+        // add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
+        // add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
+        // add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
         // 3.3 创建并优化位姿图
         create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
-        add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
-        add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
+        // add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
+        // add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
         // 3.4 图优化与结果输出
         optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
-        add_benchmark(submaps_reg, benchmark, "6_optimized");
+        // add_benchmark(submaps_reg, benchmark, "6_optimized");
     #endif
 
     // 4. 可视化处理（可视化模式）

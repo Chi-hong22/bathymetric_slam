@@ -32,6 +32,15 @@ find_package(SonarTracing REQUIRED)
 find_package(AuvlibGlad REQUIRED)
 find_package(BathyMaps REQUIRED)
 
+# 输出 DataTools 的包含目录，作为检查调试代码时使用
+if (TARGET benchmark)
+    get_target_property(DataTools_INCLUDE_DIRS benchmark INTERFACE_INCLUDE_DIRECTORIES)
+    message(STATUS "DataTools_DIRS: ${DataTools_DIR}")
+    message(STATUS "DataTools_INCLUDE_DIRS: ${DataTools_INCLUDE_DIRS}")
+else()
+    message(WARNING "DataTools_INCLUDE_DIRS 未定义。请检查 DataTools 包配置。")
+endif()
+
 include_directories(
     # 项目内部头文件
     src/submaps_tools/include 
@@ -47,6 +56,7 @@ include_directories(
     ${G2O_INCLUDE_DIRS} 
     ${OPENCV_INCLUDE_DIRS}
     ${yaml_cpp_INCLUDE_DIRS}
+
     ${_IMPORT_PREFIX}/include
 ) 
 
