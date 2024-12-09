@@ -15,7 +15,7 @@
 			},
         },
         {
-            "label": "TRICP Build",              //make 操作。    
+            "label": "Build",              //make 操作。    
 			"type": "shell",
             "command": "make",        
             "options": {

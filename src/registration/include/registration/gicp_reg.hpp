@@ -15,7 +15,9 @@
 #include <math.h>
 #include <Eigen/Core>
 
-#include </usr/include/pcl-1.10/pcl/registration/gicp.h>
+// #include </usr/include/pcl-1.10/pcl/registration/gicp.h>
+#include <pcl/registration/gicp.h>
+
 #include <pcl/registration/warp_point_rigid.h>
 #include <pcl/registration/warp_point_rigid_3d.h>
 #include <pcl/registration/transformation_estimation_lm.h>

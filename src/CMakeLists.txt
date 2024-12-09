@@ -35,6 +35,8 @@ find_package(PCL 1.14.0 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(g2o REQUIRED)
 find_package(yaml-cpp)
+# 查找 Boost 库，并指定需要的组件
+find_package(Boost REQUIRED COMPONENTS date_time)
 
 # AUVLIB stuff
 #  find_package(LIBIGL REQUIRED QUIET)

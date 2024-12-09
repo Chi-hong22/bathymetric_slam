@@ -17,9 +17,11 @@
 #include <boost/filesystem.hpp>
 #include <cereal/archives/binary.hpp>
 
-//#include "data_tools/std_data.h"
-#include "/home/link/auvlib/auvlib/src/data_tools/include/data_tools/std_data.h"
-#include "/home/link/auvlib/auvlib/src/data_tools/include/data_tools/benchmark.h"
+#include "data_tools/std_data.h"
+#include "data_tools/benchmark.h"
+// #include "/home/link/auvlib/auvlib/src/data_tools/include/data_tools/std_data.h"
+// #include "/home/link/auvlib/auvlib/src/data_tools/include/data_tools/benchmark.h"
+
 #include "submaps_tools/cxxopts.hpp"
 #include "submaps_tools/submaps.hpp"
 
@@ -207,7 +209,7 @@ int main(int argc, char** argv){
     bool add_gaussian_noise = config["add_gaussian_noise"].as<bool>();
     
     benchmark::track_error_benchmark benchmark("real_data", config["benchmark_nbr_rows"].as<int>(), config["benchmark_nbr_cols"].as<int>());
-    std::cout << "我在211行,Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
+    std::cout << "Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
      //如果 VISUAL 宏定义不等于1，按照以下顺序执行：
         //对地面真值（GT）数据进行基准测试。
         // 使用GICP方法构建测深图。
@@ -216,19 +218,26 @@ int main(int argc, char** argv){
         //优化图，并将优化后的结果记录到基准测试中。
 #if VISUAL != 1
     benchmark_gt(submaps_gt, benchmark);
+
     submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
     add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
+    std::cout << "-1_After_GICP_GT-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
-    std::cout << "程序运行成功 222" <<  std::endl;
+    std::cout << "-2_After_GICP_reg-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
-    std::cout << "程序运行成功 224" <<  std::endl;
+    std::cout << "-3_Before_init_graph_estimates_reg-" <<  std::endl;
+
     create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
-    std::cout << "程序运行成功 226" <<  std::endl;
+    std::cout << "-create_initial_graph_estimate-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
-    std::cout << "程序运行成功 228" <<  std::endl;
+    std::cout << "-4_After_init_graph_estimates_reg-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
+    std::cout << "-5_before_optimize_graph-" <<  std::endl;
+
     optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
+    std::cout << "-optimize_graph-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "6_optimized");
+    std::cout << "-6_optimizedg-" <<  std::endl;
 #endif
 
     // Visualization

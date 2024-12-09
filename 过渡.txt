@@ -1,0 +1,293 @@
+void track_error_benchmark::add_benchmark(const PointsT& maps_points, const PointsT& tracks_points,
+                                        const std::string& name) {
+    try {
+        cout << " -进入add_benchmark函数- " << endl;
+        
+        // 1. 初始化参数
+        cv::Mat error_img;
+        Eigen::MatrixXd error_vals;
+        double consistency_rms_error;
+        cout << " -1.参数初始化成功- " << endl;
+        
+        // 2. 创建网格 (使用智能指针管理内存)
+        auto grid_maps = std::make_shared<std::vector<std::vector<std::vector<Eigen::MatrixXd>>>>(
+            create_grids_from_matrices(maps_points));
+        cout << " -2.创建网格成功- " << endl;
+        
+        // 3. 计算一致性误差
+        std::tie(consistency_rms_error, error_vals) = compute_consistency_error(*grid_maps);
+        cout << " -3.计算一致性误差成功- " << endl;
+        
+        // 4. 处理误差图像
+        error_img = draw_error_consistency_map(error_vals);
+        std::string error_img_path = dataset_name + "_" + name + "_rms_consistency_error.png";
+        if(!error_img.empty()) {
+            cv::imwrite(error_img_path, error_img);
+            error_img_paths[name] = error_img_path;
+            consistency_rms_errors[name] = consistency_rms_error;
+            write_matrix_to_file(error_vals, error_img_path);
+        }
+        cout << " -4.保存误差图像成功- " << endl;
+
+        // 5. 处理深度图
+        std::string mean_img_path = dataset_name + "_" + name + "_mean_depth.png";
+        cv::Mat mean_img = draw_height_map(maps_points, mean_img_path);
+        if(!mean_img.empty()) {
+            cv::imwrite(mean_img_path, mean_img);
+        }
+        cout << " -5.保存平均深度图像成功- " << endl;
+
+        // 6. 计算标准差并生成图像
+        std::vector<cv::Mat> std_images;
+        std::vector<int> min_nbr_submap_hits{1, 2};
+        std::vector<bool> use_mean{true, false};
+        
+        for (auto hits : min_nbr_submap_hits) {
+            for (auto mean : use_mean) {
+                double average_std;
+                Eigen::MatrixXd std_grids;
+                std::tie(average_std, std_grids) = compute_grid_std(*grid_maps, hits, mean);
+                std_metrics[name][hits][mean] = average_std;
+                
+                cv::Mat grid_img = draw_grid(std_grids);
+                if(!grid_img.empty()) {
+                    std_images.push_back(grid_img);
+                    
+                    std::string std_grids_img_path = dataset_name + "_" + name + "_std_" 
+                        + std::to_string(hits) + "_use_mean_" + std::to_string(mean) + ".png";
+                    cv::imwrite(std_grids_img_path, grid_img);
+                    write_matrix_to_file(std_grids, std_grids_img_path);
+                }
+            }
+        }
+        
+        // 7. 生成组合图像
+        if(!std_images.empty()) {
+            cv::Mat combined_img;
+            cv::hconcat(std_images, combined_img);
+            cv::imwrite(dataset_name + "_" + name + "_combined_std.png", combined_img);
+        }
+        cout << " -6.保存标准差图像成功- " << endl;
+
+        // 8. 输出统计信息
+        cout << " -------------- " << endl;
+        cout << "Added benchmark " << name << endl;
+        cout << "RMS consistency error: " << consistency_rms_error << endl;
+        cout << "Consistency image map: " << error_img_path << endl;
+        for (auto hits : min_nbr_submap_hits) {
+            for (auto mean : use_mean) {
+                cout << "Std (" << hits << ", use mean = " << mean << "): " 
+                     << std_metrics[name][hits][mean] << endl;
+            }
+        }
+        cout << " -------------- " << endl;
+        
+    } catch (const std::exception& e) {
+        cerr << "Error in add_benchmark: " << e.what() << endl;
+        throw;
+    }
+}
+
+// void track_error_benchmark::add_benchmark(const PointsT& maps_points, const PointsT& tracks_points,
+//                                         const std::string& name) {
+//     try {
+//         cout << " -进入add_benchmark函数- " << endl;
+        
+//         // 1. 创建网格
+//         std::shared_ptr<std::vector<std::vector<std::vector<Eigen::MatrixXd>>>> grid_maps = 
+//             std::make_shared<std::vector<std::vector<std::vector<Eigen::MatrixXd>>>>(
+//                 create_grids_from_matrices(maps_points));
+//         cout << " -2.创建网格成功- " << endl;
+        
+//         // 2. 计算误差
+//         Eigen::MatrixXd error_vals;
+//         double consistency_rms_error;
+//         std::tie(consistency_rms_error, error_vals) = compute_consistency_error(*grid_maps);
+//         cout << " -3.计算一致性误差成功- " << endl;
+        
+//         // 3. 处理标准差
+//         for (int hits : {1, 2}) {
+//             for (bool mean : {true, false}) {
+//                 double average_std;
+//                 Eigen::MatrixXd std_grids;
+//                 std::tie(average_std, std_grids) = compute_grid_std(*grid_maps, hits, mean);
+//                 std_metrics[name][hits][mean] = average_std;
+                
+//                 std::string std_grids_img_path = dataset_name + "_" + name + "_std_" 
+//                     + std::to_string(hits) + "_use_mean_" + std::to_string(mean) + ".png";
+                
+//                 cv::Mat grid_img = draw_grid(std_grids);
+//                 if(!grid_img.empty()) {
+//                     cv::imwrite(std_grids_img_path, grid_img);
+//                     write_matrix_to_file(std_grids, std_grids_img_path);
+//                 }
+//             }
+//         }
+        
+//         // 4. 处理误差图像
+//         cv::Mat error_img = draw_error_consistency_map(error_vals);
+//         std::string error_img_path = dataset_name + "_" + name + "_rms_consistency_error.png";
+//         if(!error_img.empty()) {
+//             cv::imwrite(error_img_path, error_img);
+//             error_img_paths[name] = error_img_path;
+//             consistency_rms_errors[name] = consistency_rms_error;
+//             write_matrix_to_file(error_vals, error_img_path);
+//         }
+        
+//         // 5. 处理深度图
+//         std::string mean_img_path = dataset_name + "_" + name + "_mean_depth.png";
+//         cv::Mat mean_img = draw_height_map(maps_points, mean_img_path);
+//         if(!mean_img.empty()) {
+//             cv::imwrite(mean_img_path, mean_img);
+//         }
+        
+//     } catch (const std::exception& e) {
+//         cerr << "Error in add_benchmark: " << e.what() << endl;
+//         throw; // 重新抛出异常以便上层处理
+//     }
+// }
+
+// void track_error_benchmark::add_benchmark(const PointsT& maps_points, const PointsT& tracks_points,
+//                                           const std::string& name){
+//     cout << " -进入add_benchmark函数- " << endl;
+//     cv::Mat error_img;
+//     Eigen::MatrixXd error_vals;
+//     double consistency_rms_error;
+//     cout << " -1.参数初始化成功- " << endl;
+//     std::vector<std::vector<std::vector<Eigen::MatrixXd> > > grid_maps = create_grids_from_matrices(maps_points);
+//     cout << " -2.创建网格成功- " << endl;
+//     tie(consistency_rms_error, error_vals) = compute_consistency_error(grid_maps);
+//     cout << " -3.计算一致性误差成功- " << endl;
+
+//     error_img = draw_error_consistency_map(error_vals);
+//     cout << " -4.绘制误差图像成功- " << endl;
+    
+//     std::string error_img_path = dataset_name + "_" + name + "_rms_consistency_error.png";
+
+//     cv::imwrite(error_img_path, error_img);
+//     cout << " -5.保存误差图像成功- " << endl;
+//     error_img_paths[name] = error_img_path;
+//     consistency_rms_errors[name] = consistency_rms_error;
+//     write_matrix_to_file(error_vals, error_img_path);
+//     cout << " -6.保存误差图像数据成功- " << endl;
+
+//     std::string mean_img_path = dataset_name + "_" + name + "_mean_depth.png";
+//     cv::Mat mean_img = draw_height_map(maps_points, mean_img_path);
+//     cv::imwrite(mean_img_path, mean_img);
+//     cout << " -7.保存平均深度图像成功- " << endl;
+
+//     //Compute std error
+//     double average_std;
+//     Eigen::MatrixXd std_grids;
+//     std::vector<int> min_nbr_submap_hits{1, 2};
+//     std::vector<bool> use_mean{true, false};
+//     for (auto hits : min_nbr_submap_hits) {
+//         for (auto mean : use_mean) {
+//             tie(average_std, std_grids) = compute_grid_std(grid_maps, hits, mean);
+//             std_metrics[name][hits][mean] = average_std;
+//             std::string std_grids_img_path = dataset_name+"_"+name+"_std_" + std::to_string(hits)
+//                                             + "_use_mean_" + std::to_string(mean) + ".png";
+//             cv::imwrite(std_grids_img_path, draw_grid(std_grids));
+//             write_matrix_to_file(std_grids, std_grids_img_path);
+//         }
+//     }
+//     cout << " -------------- " << endl;
+//     cout << "Added benchmark " << name << endl;
+//     cout << "RMS consistency error: " << consistency_rms_error << endl;
+//     cout << "Consistency image map: " << error_img_path << endl;
+//     for (auto hits : min_nbr_submap_hits) {
+//         for (auto mean : use_mean) {
+//             cout << "Std (" << hits << ", use mean = " << mean << "): " << std_metrics[name][hits][mean] << endl;
+//         }
+//     }
+//     cout << " -------------- " << endl;
+// }
+
+最初版本
+void track_error_benchmark::add_benchmark(mbes_ping::PingsT& pings, const std::string& name)
+{
+    int nbr_tracks_drawn = track_rms_errors.size();
+    cv::Scalar color(colormap[nbr_tracks_drawn][2], colormap[nbr_tracks_drawn][1], colormap[nbr_tracks_drawn][0]);
+    draw_track_img(pings, track_img, color, name);
+    cv::Mat error_img;
+    Eigen::MatrixXd error_vals;
+    double consistency_rms_error;
+
+    std::vector<std::vector<std::vector<Eigen::MatrixXd> > > grid_maps = create_grids_from_pings(pings);
+    tie(consistency_rms_error, error_vals) = compute_consistency_error(grid_maps);
+    error_img = draw_error_consistency_map(error_vals);
+    draw_track_img(pings, error_img, cv::Scalar(0, 0, 0), name);
+    string error_img_path = dataset_name + "_" + name + "_rms_consistency_error.png";
+    cv::imwrite(error_img_path, error_img);
+    error_img_paths[name] = error_img_path;
+    consistency_rms_errors[name] = consistency_rms_error;
+    
+    cv::Mat mean_img = draw_height_map(pings);
+    draw_track_img(pings, mean_img, cv::Scalar(0, 0, 0), name);
+    string mean_img_path = dataset_name + "_" + name + "_mean_depth.png";
+    cv::imwrite(mean_img_path, mean_img);
+
+    double track_rms_error = compute_rms_error(pings);
+    track_rms_errors[name] = track_rms_error;
+
+    cout << "Added benchmark " << name << endl;
+    cout << "RMS track error: " << track_rms_error << endl;
+    cout << "RMS consistency error: " << consistency_rms_error << endl;
+    cout << "Consistency image map: " << error_img_path << endl;
+
+}
+最新版本的内存管理机制对最初版本进行优化
+void track_error_benchmark::add_benchmark(const PointsT& maps_points, const PointsT& tracks_points,
+                                          const std::string& name) {
+    try {
+        // 使用智能指针管理网格内存
+        auto grid_maps = std::make_shared<std::vector<std::vector<std::vector<Eigen::MatrixXd>>>>(
+            create_grids_from_matrices(maps_points)
+        );
+
+        // 计算一致性误差
+        Eigen::MatrixXd error_vals;
+        double consistency_rms_error;
+        std::tie(consistency_rms_error, error_vals) = compute_consistency_error(*grid_maps);
+
+        // 生成并保存误差一致性图像
+        cv::Mat error_img = draw_error_consistency_map(error_vals);
+        std::string error_img_path = dataset_name + "_" + name + "_rms_consistency_error.png";
+        
+        // 安全检查：确保图像不为空再保存
+        if (!error_img.empty()) {
+            cv::imwrite(error_img_path, error_img);
+            error_img_paths[name] = error_img_path;
+            consistency_rms_errors[name] = consistency_rms_error;
+            
+            // 将误差矩阵写入文件
+            write_matrix_to_file(error_vals, error_img_path);
+        }
+
+        // 生成深度图
+        std::string mean_img_path = dataset_name + "_" + name + "_mean_depth.png";
+        cv::Mat mean_img = draw_height_map(maps_points, mean_img_path);
+        
+        // 安全检查：确保深度图不为空再保存
+        if (!mean_img.empty()) {
+            cv::imwrite(mean_img_path, mean_img);
+        }
+
+        // 输出统计信息
+        cout << " -------------- " << endl;
+        cout << "Added benchmark " << name << endl;
+        cout << "RMS consistency error: " << consistency_rms_error << endl;
+        cout << "Consistency image map: " << error_img_path << endl;
+        cout << " -------------- " << endl;
+
+    } catch (const std::exception& e) {
+        // 捕获并处理可能的异常
+        cerr << "Error in add_benchmark: " << e.what() << endl;
+        
+        // 可以根据需要进行额外的错误处理
+        // 例如记录日志、通知用户或执行恢复操作
+        
+        // 重新抛出异常，让上层调用者知道发生了错误
+        throw;
+    }
+}
