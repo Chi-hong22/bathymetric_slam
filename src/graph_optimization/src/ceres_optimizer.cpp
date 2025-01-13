@@ -204,30 +204,47 @@ bool OutputPoses(const std::string& filename, const MapOfPoses& poses) {
     return true;
 }
 
+/**
+ * 使用Ceres Solver进行位姿优化
+ * 
+ * @param outFilename 输出文件名，用于保存优化后的位姿
+ * @param drConstraints 直接旋转约束的数量，用于优化问题的构建
+ * @return 返回优化后的位姿映射
+ * 
+ * 该函数的主要功能是读取一个包含位姿和约束的文件，然后使用Ceres Solver对这些位姿进行优化，
+ * 并将优化后的位姿保存到指定的文件中。在优化过程中，会根据提供的直接旋转约束数量来构建优化问题，
+ * 并进行迭代优化直到满足收敛条件。
+ */
 MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
-    // Ceres solver
+    // 初始化 Ceres solver
     ::ceres::optimizer::MapOfPoses poses;
     ::ceres::optimizer::VectorOfConstraints constraints;
 
+    // 读取文件并构建初始位姿和约束
     CHECK(::ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
         << "Error reading the file: " << outFilename;
 
+    // 输出初始位姿到文件
     CHECK(::ceres::optimizer::OutputPoses("poses_corrupted.txt", poses))
         << "Error outputting to poses_corrupted.txt";
 
     std::cout << "Original poses output" << std::endl;
 
+    // 构建Ceres优化问题
     ::ceres::Problem problem;
     ::ceres::optimizer::BuildOptimizationProblem(constraints, &poses, &problem, drConstraints);
 
     std::cout << "Ceres problem built" << std::endl;
 
+    // 求解优化问题并进行迭代
     int iterations = ::ceres::optimizer::SolveOptimizationProblem(&problem);
 //        << "The solve was not successful, exiting.";
 
+    // 输出优化后的位姿到文件
     CHECK(::ceres::optimizer::OutputPoses("poses_optimized.txt", poses))
         << "Error outputting to poses_optimized.txt";
 
+    // 返回优化后的位姿
     return poses;
 }
 

@@ -51,7 +51,7 @@ private:
 
 public:
     int submap_id_;
-    int swath_id_;//样品id
+    int swath_id_;  //条带id
     PointCloudT submap_pcl_;
     std::vector<int> overlaps_idx_;
     Eigen::Vector3d colors_;

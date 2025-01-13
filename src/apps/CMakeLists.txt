@@ -2,7 +2,11 @@ project(slam_ws_apps)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/)
 
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_BUILD_TYPE "Debug")
+
 include_directories(include)
+
 
 ## APPS
 

@@ -7,6 +7,7 @@ experiments/*
 bin/*
 build/*
 install/*
+sim_data/custom_sub_maps
 
 # Qt files
 *.config

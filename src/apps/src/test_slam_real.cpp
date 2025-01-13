@@ -61,36 +61,43 @@ void add_benchmark(SubmapsVec& submaps, benchmark::track_error_benchmark& benchm
 void benchmark_gt(SubmapsVec& submaps_gt, benchmark::track_error_benchmark& benchmark) {
     // Benchmark GT
     add_benchmark(submaps_gt, benchmark, "0_original", true);
-    ::ceres::optimizer::saveOriginalTrajectory(submaps_gt); // Save original trajectory to txt
-    std::cout << "Visualizing original survey, press space to continue" << std::endl;
+    ::ceres::optimizer::saveOriginalTrajectory(submaps_gt); // 将原始轨迹保存到txt文件
+    std::cout << "可视化原始扫描数据，按空格键继续" << std::endl;
 }
+
 // 函数通过GICP子图配准和SLAM求解器，构建一个包含海洋深度图的SLAM图。
 SubmapsVec build_bathymetric_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_gt,
-GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config) {
+                                   GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config) {
 
     // GICP reg for submaps
     SubmapRegistration gicp_reg(config);
 
-    // Create SLAM solver and run offline
-    std::cout << "Building bathymetric graph with GICP submap registration" << std::endl;
+    // 创建SLAM求解器
+    std::cout << "使用GICP子图配准构建水下地形图SLAM图" << std::endl;
     BathySlam slam_solver(graph_obj, gicp_reg);
+
+    // 运行离线的Bathyslam算法
+        // submaps_gt: 地面真值子图
+        // transSampler: 平移噪声的高斯采样器
+        // rotSampler: 旋转噪声的高斯采样器
+        // config: 配置参数
     SubmapsVec submaps_reg = slam_solver.runOffline(submaps_gt, transSampler, rotSampler, config);
-    std::cout << "Done building graph, press space to continue" << std::endl;
+    std::cout << "图构建完成，按空格键继续" << std::endl;
+
     return submaps_reg;
 }
-//创建初始图形估计，如果add_gaussian_noise=true，则可选择添加高斯噪声
-// Create initial graph estimates, optionally add gaussian noise if add_gaussian_noise = true
-void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, GaussianGen& transSampler, GaussianGen& rotSampler, bool add_gaussian_noise) {
-    std::cout << "Add gaussian noise = " << add_gaussian_noise << std::endl;
-    if (add_gaussian_noise) {
-        // Add noise to edges on the graph
-        graph_obj.addNoiseToGraph(transSampler, rotSampler);
-        std::cout << "Gaussian noise added to graph" << std::endl;
-    }
-    // Create initial DR chain and visualize
-    graph_obj.createInitialEstimate(submaps_reg);
-    std::cout << "Initial graph estimate constructed, press space to continue" << std::endl;
 
+// 创建初始图形估计，如果add_gaussian_noise=true，则可选择添加高斯噪声
+void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, GaussianGen& transSampler, GaussianGen& rotSampler, bool add_gaussian_noise) {
+    std::cout << "是否添加高斯噪声 = " << add_gaussian_noise << std::endl;
+    if (add_gaussian_noise) {
+        // 向图中的边添加噪声
+        graph_obj.addNoiseToGraph(transSampler, rotSampler);
+        std::cout << "已向图添加高斯噪声" << std::endl;
+    }
+    // 创建初始DR链并可视化
+    graph_obj.createInitialEstimate(submaps_reg);
+    std::cout << "初始图形估计构建完成，按空格键继续" << std::endl;
 }
 //图优化
 void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::string outFilename, char* argv0, boost::filesystem::path output_path) {
@@ -210,16 +217,22 @@ int main(int argc, char** argv){
     
     benchmark::track_error_benchmark benchmark("real_data", config["benchmark_nbr_rows"].as<int>(), config["benchmark_nbr_cols"].as<int>());
     std::cout << "Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
-     //如果 VISUAL 宏定义不等于1，按照以下顺序执行：
-        //对地面真值（GT）数据进行基准测试。
-        // 使用GICP方法构建测深图。
-        //添加基准测试，标记不同阶段的数据状态。
-        //创建初始图优化估计。
-        //优化图，并将优化后的结果记录到基准测试中。
-#if VISUAL != 1
-    benchmark_gt(submaps_gt, benchmark);
 
+#if VISUAL != 1
+    //如果 VISUAL 宏定义不等于1，按照以下顺序执行：
+        // 对地面真值（GT）数据进行基准测试。
+        // 使用GICP方法构建测深图。
+        // 添加基准测试，标记不同阶段的数据状态。
+        // 创建初始图优化估计。
+        // 优化图，并将优化后的结果记录到基准测试中。
+
+    // 使用ground truth数据对benchmark进行评估
+    benchmark_gt(submaps_gt, benchmark);
+    std::cout << "---benchmark_gt---" <<  std::endl;
+
+    // 进行离线SLAM
     submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+    std::cout << "---build_bathymetric_graphe---" <<  std::endl;
     add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
     std::cout << "-1_After_GICP_GT-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
@@ -227,17 +240,20 @@ int main(int argc, char** argv){
     add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
     std::cout << "-3_Before_init_graph_estimates_reg-" <<  std::endl;
 
+    // 创建初始图估计
     create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
-    std::cout << "-create_initial_graph_estimate-" <<  std::endl;
+    std::cout << "---create_initial_graph_estimate---" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
     std::cout << "-4_After_init_graph_estimates_reg-" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
     std::cout << "-5_before_optimize_graph-" <<  std::endl;
 
+    // 优化图
     optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
-    std::cout << "-optimize_graph-" <<  std::endl;
+    std::cout << "---optimize_graph---" <<  std::endl;
     add_benchmark(submaps_reg, benchmark, "6_optimized");
     std::cout << "-6_optimizedg-" <<  std::endl;
+
 #endif
 
     // Visualization

@@ -52,56 +52,63 @@ void GraphConstructor::createDREdge(const SubmapObj& submap){
 
 
 // Important: select method for computing edge's weight
+// 创建两个子地图之间的回环闭合边
+// 该函数在图优化过程中构建回环闭合边，连接两个子地图以形成回环闭合约束
 void GraphConstructor::createLCEdge(const SubmapObj& submap_from, const SubmapObj& submap_to){
-
+    // 输出从哪个子地图ID到哪个子地图ID创建回环闭合边
     std::cout << "LC edge from " << submap_from.submap_id_ << " to " << submap_to.submap_id_ << std::endl;
 
-    // Generate loop closure edges
+    // 生成回环闭合边
     VertexSE3* from = vertices_[submap_from.submap_id_];
     VertexSE3* to   = vertices_[submap_to.submap_id_];
+    // 计算两个子地图之间的相对姿态变换
     //Eigen::Isometry3d t = from->estimate().inverse() * submap_to.submap_tf_.cast<double>();
     Eigen::Isometry3d t = submap_from.submap_tf_.cast<double>().inverse() * submap_to.submap_tf_.cast<double>();
+    // 创建一个新的EdgeSE3对象来表示回环闭合边
     EdgeSE3* e = new EdgeSE3;
     e->setVertex(0, from);
     e->setVertex(1, to);
     e->setMeasurement(t);
 
-    // Information matrix for LC edges
+    // 回环闭合边的信息矩阵
     Eigen::Array3f info = computeInfoInSubmap(submap_from);
 
-    // Submap covariance matrix
+    // 子地图的协方差矩阵
     Eigen::Matrix3f cov_matrix;
     Eigen::Vector4f xyz_centroid;
+    // 计算子地图点云的质心
     pcl::compute3DCentroid(submap_from.submap_pcl_, xyz_centroid);
+    // 计算子地图点云的协方差矩阵
     pcl::computeCovarianceMatrix(submap_from.submap_pcl_, xyz_centroid, cov_matrix);
 
-    // Info matrix proportional to variance in Z in the pointcloud
+    // 信息矩阵与点云中Z方向的方差成比例
     Eigen::Matrix<double, 6, 6> information = Eigen::Matrix<double, 6, 6>::Zero();
     Eigen::VectorXd info_diag(4), info_diag_trans(2);
     info_diag << 10000.0, 10000.0, 10000.0, 1000.0;
     information.bottomRightCorner(4,4) = info_diag.asDiagonal();
     Eigen::Matrix2d cov_reg;
 
+    // 根据不同的协方差类型设置信息矩阵
     switch (edge_covs_type_) {
-        // Fixed external val
+        // 固定外部值
         case 0:
 //            std::cout << "Fixed covs " << std::endl;
             info_diag_trans << covs_lc_.at(0)(0,0), covs_lc_.at(0)(0,0);
             information.topLeftCorner(2,2) = info_diag_trans.asDiagonal();
             break;
-        // Manual vals
+        // 手动设置值
         case 1:
 //            std::cout << "Avg covs " << std::endl;
             info_diag << 10000.0, 10000.0, 10000.0, 1000.0;
             information.block<2,2>(0,0) << 5.382, -0.486, -0.486, 8.057;  //Borno
     //        information.block<2,2>(0,0) << 3.348, -3.127, -3.127, 5.445;    // Antarctica
             break;
-        // Covs from GICP
+        // 来自GICP的协方差
         case 2:
 //            std::cout << "GICP covs " << std::endl;
             information = submap_from.submap_lc_info_;
             break;
-        // Covs from external file
+        // 来自外部文件的协方差
         case 3:
 //            std::cout << "External covs " << std::endl;
             cov_reg = covs_lc_.at(submap_from.submap_id_);
@@ -117,7 +124,7 @@ void GraphConstructor::createLCEdge(const SubmapObj& submap_from, const SubmapOb
 //    std::cout << information << std::endl;
     e->setInformation(information);
 
-    // Check resulting COV is positive semi-definite
+    // 检查结果协方差是否为正半定
     Eigen::LLT<Eigen::MatrixXd> lltOfA(information);
     if(lltOfA.info() != Eigen::NumericalIssue){
         lcEdges_.push_back(e);
@@ -129,10 +136,12 @@ void GraphConstructor::createLCEdge(const SubmapObj& submap_from, const SubmapOb
 void GraphConstructor::findLoopClosures(SubmapObj& submap_i, const SubmapsVec& submaps_set,
                                         double info_thres){
 
-    // Check all submaps in overlaps vector
+    // 遍历子地图集合
     for(SubmapObj submap_j: submaps_set){
+        // 检查 submap_j 的 submap_id_ 是否在 submap_i 的 overlaps_idx_ 中
         if(find(submap_i.overlaps_idx_.begin(), submap_i.overlaps_idx_.end(), submap_j.submap_id_)
                 != submap_i.overlaps_idx_.end()){
+            // 如果找到重叠区域，创建回环边缘
             this->createLCEdge(submap_i, submap_j);
         }
     }
@@ -140,7 +149,7 @@ void GraphConstructor::findLoopClosures(SubmapObj& submap_i, const SubmapsVec& s
 
 
 void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
-     std::cout << "程序运行成功 143" <<  std::endl;
+     std::cout << "-createInitialEstimate-" <<  std::endl;
     // Concatenate all the odometry constraints to compute the initial kinematic chain
     for (size_t i =0; i < drEdges_.size(); i++) {
         Eigen::Isometry3d meas_i = drMeas_.at(i);

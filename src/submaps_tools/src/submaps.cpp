@@ -139,9 +139,19 @@ std::pair<int, corners> getSubmapCorners(bool submaps_in_map_tf, const SubmapObj
 }
 
 
+/**
+ * 检查两个子地图是否重叠。
+ * 
+ * 该函数通过检查一个子地图的角点是否位于另一个子地图内来确定两个子地图是否重叠。
+ * 具体来说，它会检查子地图 i 的每个角点相对于子地图 k 的四条边的位置关系。
+ * 
+ * @param submap_i_corners 子地图 i 的角点。
+ * @param submap_k_corners 子地图 k 的角点。
+ * @return 如果子地图重叠，返回 true；否则返回 false。
+ */
 bool checkSubmapsOverlap(const corners submap_i_corners, const corners submap_k_corners){
 
-    // Check every corner of i against every edge of k
+    // 检查子地图 i 的每个角点相对于子地图 k 的每条边
     int inside;
     bool overlap = false;
     unsigned int k_next;
@@ -151,10 +161,10 @@ bool checkSubmapsOverlap(const corners submap_i_corners, const corners submap_k_
         }
         inside = 0;
         for(unsigned int k = 0; k<submap_k_corners.size(); k++){
-            // Four corners
+            // 四个角点
             k_next = k + 1;
             k_next = (k_next == submap_k_corners.size())? 0: k_next;
-            // Check against four edges
+            // 检查四条边
             if(pointToLine(submap_k_corners.at(k), submap_k_corners.at(k_next), corner_i)){
                 inside++;
             }

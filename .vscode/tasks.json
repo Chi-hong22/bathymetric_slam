@@ -7,7 +7,6 @@
             "args": [ 
                 "-DCMAKE_BUILD_TYPE=Debug",  // 设置Debug模式
                 "-DCMAKE_INSTALL_PREFIX=../install", // 安装路径
-                
                 ".."
             ],
 			"options": {
