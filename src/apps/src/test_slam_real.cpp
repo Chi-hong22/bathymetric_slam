@@ -101,21 +101,30 @@ void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& subm
 }
 //图优化
 void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::string outFilename, char* argv0, boost::filesystem::path output_path) {
-    // Save graph to output g2o file (optimization can be run with G2O)
+    // 将图保存为g2o文件格式,以便可以用G2O工具进行优化
     graph_obj.saveG2OFile(outFilename);
 
-    // Optimize graph and save to cereal
+    // 初始化Google日志系统
     google::InitGoogleLogging(argv0);
+
+    // 使用Ceres求解器优化图结构
+    // poses存储优化后的位姿结果
+    // graph_obj.drEdges_.size()表示Dead Reckoning边的数量
     ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
+
+    // 使用优化后的位姿更新子地图
     ::ceres::optimizer::updateSubmapsCeres(poses, submaps_reg);
+
+    // 输出优化后的结果到cereal序列化文件
     std::cout << "Output cereal: " << boost::filesystem::basename(output_path) << std::endl;
     std::ofstream os(boost::filesystem::basename(output_path) + ".cereal", std::ofstream::binary);
     {
+        // 使用cereal的二进制存档器序列化子地图数据
         cereal::BinaryOutputArchive oarchive(os);
         oarchive(submaps_reg);
         os.close();
     }
-    std::cout << "Graph optimized, press space to continue" << std::endl;
+    std::cout << "已进行图优化，按空格键继续" << std::endl;
 }
 //实现了基准测试结果的打印和可视化
 void print_benchmark_results(SubmapsVec& submaps_reg, benchmark::track_error_benchmark& benchmark) {
@@ -158,7 +167,7 @@ int main(int argc, char** argv){
     string outFilename = "graph_corrupted.g2o";   // G2O output file
 
     YAML::Node config = YAML::LoadFile(config_path);
-    std::cout << "Config file: " << config_path << std::endl;
+    std::cout << "已加载 Config file: " << config_path << std::endl;
     DRNoise dr_noise = loadDRNoiseFromFile(config);
 
     // Parse submaps from cereal file
@@ -276,23 +285,23 @@ int main(int argc, char** argv){
                 submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
                 visualizer->updateVisualizer(submaps_reg);
                 // Benchmark GT after GICP, the GT submaps have now been moved due to GICP registration
-                add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
-                add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
+                add_benchmark(submaps_gt, benchmark, "-1_After_GICP_GT-");
+                add_benchmark(submaps_reg, benchmark, "-2_After_GICP_reg-");
                 break;
             case 2:
-                add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
+                add_benchmark(submaps_reg, benchmark, "-3_Before_init_graph_estimates_reg-");
                 create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
                 visualizer->plotPoseGraphG2O(graph_obj, submaps_reg);
                 // Benchmark corrupted (or not corrupted if add_gaussian_noise = false)
-                add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
+                add_benchmark(submaps_reg, benchmark, "-4_After_init_graph_estimates_reg-");
                 break;
             case 3:
-                add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
+                add_benchmark(submaps_reg, benchmark, "-5_before_optimize_graph-");
                 optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
                 // Visualize Ceres output
                 visualizer->plotPoseGraphCeres(submaps_reg);
                 // Benchmark Optimized
-                add_benchmark(submaps_reg, benchmark, "6_optimized");
+                add_benchmark(submaps_reg, benchmark, "-6_optimized-");
                 break;
             default:
                 break;

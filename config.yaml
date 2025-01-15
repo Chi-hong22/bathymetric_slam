@@ -1,32 +1,40 @@
-# Benchmark imap size
+# 基准测试 imap 尺寸
 benchmark_nbr_rows: 200
 benchmark_nbr_cols: 1000
 
-# Point cloud downsampling (m)
+# 点云下采样参数（单位：米）
 downsampling_leaf_x: .2
 downsampling_leaf_y: .2
 downsampling_leaf_z: .1
 
-# Bathy SLAM params
-submap_size: 500 # nbr_pings per submap
+# 海底 SLAM 参数
+submap_size: 100  # 每个子地图的 ping 数  原始数据：500
 add_gaussian_noise: false
 
-# Submap overlaps
-overlap_coverage: 0.9 # Reduce submap area to look for overlap by this factor
+# 子地图重叠。较高的值意味着只有当两个子图有较小比例的重叠时会被认为是重叠
+overlap_coverage: 0.7 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 注意：250113_该参数对结果影响最大
 
+# GICP 配准参数（单位：米）
+gicp_max_correspondence_distance: 20    # 对应点对的最大距离阈值，超过此距离的点对将被忽略 原始数据：20
+gicp_maximum_iterations: 200            # GICP 算法的最大迭代次数 原始数据：200
+gicp_transform_epsilon: 1e-3            # 两次迭代间变换矩阵差异的收敛阈值
+gicp_euclidean_fitness_epsilon: 1e-3    # 配准误差收敛阈值，当误差小于此值时停止迭代
+gicp_ransac_outlier_rejection_threshold: 1  # RANSAC 异常值剔除阈值，用于去除错误匹配 原始数据：1
+gicp_normal_use_knn_search: true        # 是否使用 K 近邻搜索计算法向量
+gicp_normal_search_radius: 20           # 计算法向量时的搜索半径（当 use_knn_search = false）
+gicp_normal_search_k_neighbours: 30     # K 近邻搜索时使用的邻居点数量（当 use_knn_search = true）
+gicp_info_diag: [10000.0, 10000.0, 10000.0, 1000.0]  # 信息矩阵参数说明 原始数据：[10000.0, 10000.0, 10000.0, 1000.0]
+# 信息矩阵对角线元素 [x, y, z, rotation]
+# - 前三个值(10000.0)控制xyz方向的位置约束强度
+# - 最后一个值(1000.0)控制旋转约束的强度
+# - 值越大表示约束越强/不确定性越小
+# - 值越小表示约束越弱/不确定性越大
+# 如果发现位置对齐不准，可以增大前3个值
+# 如果发现旋转对齐不准，可以增大最后1个值
+# 如果优化结果过于刚性，可以适当减小对应值
+# 通常位置约束应大于旋转约束
 
-# GICP registration params (meters)
-gicp_max_correspondence_distance: 20
-gicp_maximum_iterations: 200
-gicp_transform_epsilon: 1e-3
-gicp_euclidean_fitness_epsilon: 1e-3
-gicp_ransac_outlier_rejection_threshold: 1
-gicp_normal_use_knn_search: true
-gicp_normal_search_radius: 20 # used if gicp_normal_use_knn_search = false
-gicp_normal_search_k_neighbours: 20 # used if gicp_normal_use_knn_search = true
-gicp_info_diag: [10000.0, 10000.0, 10000.0, 1000.0]
-
-# DR weights - uncertainty on vehicle navigation across submap
+# DR 权重 - 车辆在子地图间导航的不确定性
 dr_noise_x: 5.
 dr_noise_y: 5.
 dr_noise_z: 1.
@@ -34,9 +42,9 @@ dr_noise_roll: 1e-4
 dr_noise_pitch: 1e-4
 dr_noise_yaw: 1e-2
 
-# Loop closure edge covariance computation method
-# 0 = fixed external value
-# 1 = manual inputs (#TODO: factor out to YAML file)
-# 2 = covariances from GICP
-# 3 = covariances loaded from external file
+# 回环边协方差计算方法
+# 0 = 固定外部值
+# 1 = 手动输入（#待办：移至YAML文件）
+# 2 = 来自GICP的协方差
+# 3 = 从外部文件加载的协方差
 lc_edge_covs_type: 2

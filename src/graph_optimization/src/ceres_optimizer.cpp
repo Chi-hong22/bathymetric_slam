@@ -153,30 +153,41 @@ void BuildOptimizationProblem(const VectorOfConstraints& constraints,
     problem->SetParameterBlockConstant(pose_start_iter->second.q.data());
 }
 
-// Returns true if the solve was successful.
+// 返回优化求解是否成功，返回迭代次数
 int SolveOptimizationProblem(::ceres::Problem* problem) {
+    // 检查输入问题指针不为空
     CHECK(problem != NULL);
 
+    // 创建Ceres求解器配置选项
     ::ceres::Solver::Options options;
+    // 设置最大迭代次数为300
     options.max_num_iterations = 300;
-    options.linear_solver_type = ::ceres::SPARSE_NORMAL_CHOLESKY;
-//    options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
-//    options.linear_solver_type = ceres::SPARSE_SCHUR;
-//    options.linear_solver_type = ceres::SPARSE_QR;
-    //options.linear_solver_type = ceres::DENSE_QR;
+    // 选择线性求解器
+    options.linear_solver_type = ::ceres::SPARSE_NORMAL_CHOLESKY;  // 稀疏正规方程，适用于大规模稀疏问题
+    // options.linear_solver_type = ::ceres::DENSE_NORMAL_CHOLESKY; // 稠密正规方程
+    // options.linear_solver_type = ::ceres::SPARSE_SCHUR;  // 稀疏Schur消元
+    // options.linear_solver_type = ::ceres::SPARSE_QR;     // 稀疏QR分解
+    // options.linear_solver_type = ::ceres::DENSE_QR;      // 稠密QR分解
 
-    //  options.minimizer_type = ceres::LINE_SEARCH;
-    options.trust_region_strategy_type = ::ceres::LEVENBERG_MARQUARDT;
+    // 选择Levenberg-Marquardt算法作为信赖域优化策略
+    options.trust_region_strategy_type = ::ceres::LEVENBERG_MARQUARDT;  // 结合了梯度下降和高斯牛顿法的优化算法
+    // 禁用内部迭代
     options.use_inner_iterations = false;
+    // 在标准输出中显示优化进度
     options.minimizer_progress_to_stdout = true;
-    options.num_threads =4;
+    // 设置使用4个线程并行计算
+    options.num_threads = 4;
+    // 设置eta参数(用于控制步长)为1e-9
     options.eta = 1e-9;
 
+    // 创建求解器汇总信息对象
     ::ceres::Solver::Summary summary;
+    // 执行优化求解
     ::ceres::Solve(options, problem, &summary);
-//    std::cout << summary.FullReport() << '\n';
+    // 可选:输出完整优化报告
+    // std::cout << summary.FullReport() << '\n';
 
-
+    // 返回实际执行的迭代次数
     return summary.iterations.size();
 }
 

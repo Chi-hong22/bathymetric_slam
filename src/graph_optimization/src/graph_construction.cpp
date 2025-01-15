@@ -56,7 +56,7 @@ void GraphConstructor::createDREdge(const SubmapObj& submap){
 // 该函数在图优化过程中构建回环闭合边，连接两个子地图以形成回环闭合约束
 void GraphConstructor::createLCEdge(const SubmapObj& submap_from, const SubmapObj& submap_to){
     // 输出从哪个子地图ID到哪个子地图ID创建回环闭合边
-    std::cout << "LC edge from " << submap_from.submap_id_ << " to " << submap_to.submap_id_ << std::endl;
+    std::cout << "闭环边 LC edge from " << submap_from.submap_id_ << " to " << submap_to.submap_id_ << std::endl;
 
     // 生成回环闭合边
     VertexSE3* from = vertices_[submap_from.submap_id_];
@@ -133,15 +133,19 @@ void GraphConstructor::createLCEdge(const SubmapObj& submap_from, const SubmapOb
 }
 
 
+// 在给定的子地图集合中查找回环闭合
+// 此函数的目的是为了在一组子地图中找到与特定子地图存在重叠的其他子地图
+// 这对于构建全局地图和优化轨迹估计非常重要
 void GraphConstructor::findLoopClosures(SubmapObj& submap_i, const SubmapsVec& submaps_set,
                                         double info_thres){
-
     // 遍历子地图集合
     for(SubmapObj submap_j: submaps_set){
         // 检查 submap_j 的 submap_id_ 是否在 submap_i 的 overlaps_idx_ 中
+        // 这一步是为了确定两个子地图是否有足够的重叠区域，可以形成回环
         if(find(submap_i.overlaps_idx_.begin(), submap_i.overlaps_idx_.end(), submap_j.submap_id_)
                 != submap_i.overlaps_idx_.end()){
             // 如果找到重叠区域，创建回环边缘
+            // 这将有助于在子地图之间建立约束，用于后续的优化过程
             this->createLCEdge(submap_i, submap_j);
         }
     }

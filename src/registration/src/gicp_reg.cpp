@@ -40,16 +40,42 @@ SubmapRegistration::~SubmapRegistration(){
 
 }
 
+/**
+ * @brief 加载并配置GICP算法的参数。
+ * 
+ * 该函数从YAML配置文件中读取参数，并将其应用到GICP（Generalized Iterative Closest Point）算法中。
+ * 配置项包括最大对应距离、最大迭代次数、变换增量阈值、欧几里得适配度阈值、RANSAC离群点剔除阈值、法向量计算方法等。
+ * 这些参数用于优化点云配准的精度和鲁棒性。
+ * 
+ * @param config YAML配置节点，包含GICP算法所需的各项参数。
+ */
 void SubmapRegistration::loadConfig(YAML::Node config){
-    gicp_.setMaxCorrespondenceDistance(config["gicp_max_correspondence_distance"].as<double>());//设置最大对应距离，此参数决定了在两点之间的匹配点的最大距离，超过该距离的点对将被忽略，用于减少不相关的噪声点的影响。
-    gicp_.setMaximumIterations(config["gicp_maximum_iterations"].as<int>());//设置GICP算法的最大迭代次数，用于控制迭代收敛的时间。
-    gicp_.setTransformationEpsilon(config["gicp_transform_epsilon"].as<double>());//设置变换增量的阈值。此参数控制了算法的收敛精度，当变换的变化量小语言此值时，算法认为已经收敛。
-    gicp_.setEuclideanFitnessEpsilon(config["gicp_euclidean_fitness_epsilon"].as<double>());//设置欧几里得适配度阈值，用于评估点云配准的效果，通常配准越好，该值越小
-    gicp_.setRANSACOutlierRejectionThreshold(config["gicp_ransac_outlier_rejection_threshold"].as<double>());//设置RANSAC的离群点剔除阈值，用于剔除不符合配准模型的离群点，提升配准的鲁棒性。
-    normal_use_knn_search = config["gicp_normal_use_knn_search"].as<bool>();//指定法向量计算是否使用K近邻搜索，通常用在法向量估计时，设置为true表示使用
-    normal_search_radius = config["gicp_normal_search_radius"].as<double>();//指定法向量计算的搜索半径，用于选择法向量估计时考虑的临近点范围
-    normal_search_k_neighbours = config["gicp_normal_search_k_neighbours"].as<int>();//指定K近邻算法的邻居数量，用于法向量计算，控制考虑的最近点数量。
-    info_diag_values = config["gicp_info_diag"].as<std::vector<double>>();//设置信息矩阵的对角线值（通常为3个数值，分别对应x\y\z方向）。信息矩阵用于配准后位姿的优化，指定不同方向上的不确定性，用于约束配准结果的准确性。
+    // 设置最大对应距离，此参数决定了在两点之间的匹配点的最大距离，超过该距离的点对将被忽略，用于减少不相关的噪声点的影响。
+    gicp_.setMaxCorrespondenceDistance(config["gicp_max_correspondence_distance"].as<double>());
+
+    // 设置GICP算法的最大迭代次数，用于控制迭代收敛的时间。
+    gicp_.setMaximumIterations(config["gicp_maximum_iterations"].as<int>());
+
+    // 设置变换增量的阈值。此参数控制了算法的收敛精度，当变换的变化量小于此值时，算法认为已经收敛。
+    gicp_.setTransformationEpsilon(config["gicp_transform_epsilon"].as<double>());
+
+    // 设置欧几里得适配度阈值，用于评估点云配准的效果，通常配准越好，该值越小。
+    gicp_.setEuclideanFitnessEpsilon(config["gicp_euclidean_fitness_epsilon"].as<double>());
+
+    // 设置RANSAC的离群点剔除阈值，用于剔除不符合配准模型的离群点，提升配准的鲁棒性。
+    gicp_.setRANSACOutlierRejectionThreshold(config["gicp_ransac_outlier_rejection_threshold"].as<double>());
+
+    // 指定法向量计算是否使用K近邻搜索，通常用在法向量估计时，设置为true表示使用。
+    normal_use_knn_search = config["gicp_normal_use_knn_search"].as<bool>();
+
+    // 指定法向量计算的搜索半径，用于选择法向量估计时考虑的临近点范围。
+    normal_search_radius = config["gicp_normal_search_radius"].as<double>();
+
+    // 指定K近邻算法的邻居数量，用于法向量计算，控制考虑的最近点数量。
+    normal_search_k_neighbours = config["gicp_normal_search_k_neighbours"].as<int>();
+
+    // 设置信息矩阵的对角线值（通常为3个数值，分别对应x\y\z方向）。信息矩阵用于配准后位姿的优化，指定不同方向上的不确定性，用于约束配准结果的准确性。
+    info_diag_values = config["gicp_info_diag"].as<std::vector<double>>();
 }
 
 SubmapObj SubmapRegistration::constructTrgSubmap(const SubmapsVec& submaps_set, std::vector<int>& overlaps, const DRNoise& dr_noise){
@@ -95,22 +121,32 @@ double SubmapRegistration::consistencyErrorOverlap(const SubmapObj& trg_submap,
 }
 
 
+/**
+ * @brief 使用广义迭代最近点算法（GICP）进行子图注册。
+ *
+ * 该函数通过GICP算法将源子图（src_submap）与目标子图（trg_submap）对齐，并修改源子图以反映对齐结果。
+ * 
+ * @param trg_submap 目标子图对象，用于作为参考进行对齐
+ * @param src_submap 源子图对象，将被对齐到目标子图并在此过程中被修改
+ * 
+ * @return 返回布尔值，表示GICP算法是否成功收敛。如果算法收敛则返回true，否则返回false。
+ */
 bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj& src_submap){
     //N.B. this function modifies the src_submap when aligning it to
 
-    // Copy the originals to work over them
+    // 复制原始点云数据以便在副本上操作
     PointCloudT::Ptr src_pcl_ptr (new PointCloudT(src_submap.submap_pcl_));
     PointCloudT::Ptr trg_pcl_ptr (new PointCloudT(trg_submap.submap_pcl_));
 
-    // Compute GICP covs externally
+    // 计算GICP协方差矩阵
     pcl::NormalEstimation<PointT, pcl::Normal> ne;
     pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ> ());
     ne.setSearchMethod(tree);
     if (normal_use_knn_search) {
-        std::cout << "Using KNN search with K neighbours: " << normal_search_k_neighbours << std::endl;
+        std::cout << "使用KNN搜索，邻居数: " << normal_search_k_neighbours << std::endl;
         ne.setKSearch(normal_search_k_neighbours);
     } else {
-        std::cout << "Use radius search with radius: " << normal_search_radius << std::endl;
+        std::cout << "使用半径搜索，半径: " << normal_search_radius << std::endl;
         ne.setRadiusSearch(normal_search_radius);
     }
 
@@ -132,7 +168,7 @@ bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj
     pcl::features::computeApproximateCovariances(*trg_pcl_ptr, *normals_trg, covs_trg);
     covs_trg_ptr.reset(new CovsVec(covs_trg));
 
-    // Compute GICP vanilla information matrix
+    // 计算GICP信息矩阵
     Eigen::Matrix3d avg_cov_src;
     avg_cov_src.setZero();
     for(unsigned int n=0; n<covs_src_ptr->size(); n++){
@@ -147,45 +183,44 @@ bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj
     }
     avg_cov_trg /= (covs_trg_ptr->size());
 
-    // The Iterative Closest Point algorithm
+    // 执行迭代最近点算法
     gicp_.setInputSource(src_pcl_ptr);
     gicp_.setInputTarget(trg_pcl_ptr);
     gicp_.setSourceCovariances(covs_src_ptr);
     gicp_.setTargetCovariances(covs_trg_ptr);
     gicp_.align (src_submap.submap_pcl_);
 
-    // Apply transform to submap
+    // 应用变换到子图
     ret_tf_ =  gicp_.getFinalTransformation();
     this->transformSubmap(src_submap);
 
-    std::cout << "average cov src: " << avg_cov_src << std::endl;
-    std::cout << "average cov target: " << avg_cov_trg << std::endl;
+    std::cout << "源子图平均协方差: " << avg_cov_src << std::endl;
+    std::cout << "目标子图平均协方差: " << avg_cov_trg << std::endl;
 
-    std::cout << "ret_tf: " << ret_tf_ << std::endl;
+    std::cout << "最终变换矩阵: " << ret_tf_ << std::endl;
 
-    // Set GICP information matrix
+    // 设置GICP信息矩阵
     src_submap.submap_lc_info_.setZero();
     Eigen::VectorXd info_diag = Eigen::Map<Eigen::Vector4d>(info_diag_values.data());
-    std::cout << "GICP info diag: " << info_diag << std::endl;
+    std::cout << "GICP信息矩阵对角线元素: " << info_diag << std::endl;
     src_submap.submap_lc_info_.bottomRightCorner(4,4) = info_diag.asDiagonal();
 
     Eigen::Matrix3d rot = ret_tf_.topLeftCorner(3,3).cast<double>();
-    std::cout << "rot: " << rot << std::endl;
-    std::cout << "rot.T: " << rot.transpose() << std::endl;
+    std::cout << "旋转矩阵: " << rot << std::endl;
+    std::cout << "旋转矩阵转置: " << rot.transpose() << std::endl;
 
     Eigen::Matrix3d gicp_cov = avg_cov_trg + rot*avg_cov_src*rot.transpose();
-    std::cout << "gicp_cov: " << gicp_cov << std::endl;
+    std::cout << "GICP协方差矩阵: " << gicp_cov << std::endl;
     src_submap.submap_lc_info_.topLeftCorner(2,2) = gicp_cov.topLeftCorner(2,2).inverse();
-//    std::cout << gicp_cov.topLeftCorner(3,3) << std::endl;
 
     for(int x=0; x<src_submap.submap_lc_info_.array().size(); x++){
         if(isnan(src_submap.submap_lc_info_.array()(x))){
-            throw std::runtime_error("Nan components in the matrix");
+            throw std::runtime_error("矩阵中存在NaN成分");
             std::exit(0);
         }
     }
 
-    // TODO: compute this value properly
+    // TODO: 正确计算此值
     bool convergence = (gicp_.hasConverged())? true: false;
     return convergence;
 }

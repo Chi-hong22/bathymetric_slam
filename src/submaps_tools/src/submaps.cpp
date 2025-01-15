@@ -21,6 +21,15 @@
 //
 using namespace Eigen;
 
+/**
+ * 从YAML配置文件中加载DR（Dead Reckoning）噪声参数
+ * 
+ * 该函数通过读取YAML配置文件中的相关节点，来初始化和返回一个DRNoise结构体实例
+ * 这使得用户能够根据配置文件自定义噪声参数，从而影响定位和导航系统的性能
+ * 
+ * @param config 包含DR噪声参数的YAML节点
+ * @return 初始化了噪声参数的DRNoise结构体实例
+ */
 DRNoise loadDRNoiseFromFile(YAML::Node config) {
     return DRNoise{
         .x=config["dr_noise_x"].as<double>(),
@@ -52,9 +61,18 @@ SubmapObj::SubmapObj(const unsigned int& submap_id, const unsigned int& swath_id
     submap_info_ = createDRWeights(dr_noise);
 }
 
+/**
+ * @brief 创建DR权重的信息矩阵
+ * 
+ * 该函数根据提供的DR噪声参数，构建一个6x6的信息矩阵。该矩阵包含车辆在子地图之间的导航不确定性，
+ * 包括平移和旋转的不确定性（假设每个子地图具有相似的长度）。
+ * 
+ * @param dr_noise 死记噪声参数，包含x, y, z方向的平移噪声以及roll, pitch, yaw方向的旋转噪声
+ * @return Eigen::Matrix<double, 6, 6> 返回一个6x6的信息矩阵，表示分布的信息矩阵
+ */
 Eigen::Matrix<double, 6, 6> SubmapObj::createDRWeights(const DRNoise& dr_noise){
 
-    // Uncertainty on vehicle nav across submaps (assuming here that each has a similar length)
+    // 提取平移和旋转噪声
     std::vector<double> noiseTranslation;
     std::vector<double> noiseRotation;
     noiseTranslation.push_back(dr_noise.x);
@@ -64,15 +82,17 @@ Eigen::Matrix<double, 6, 6> SubmapObj::createDRWeights(const DRNoise& dr_noise){
     noiseRotation.push_back(dr_noise.pitch);
     noiseRotation.push_back(dr_noise.yaw);
 
+    // 构建平移噪声协方差矩阵
     Eigen::Matrix3d transNoise = Eigen::Matrix3d::Zero();
     for (int i = 0; i < 3; ++i)
       transNoise(i, i) = std::pow(noiseTranslation[i], 2);
 
+    // 构建旋转噪声协方差矩阵
     Eigen::Matrix3d rotNoise = Eigen::Matrix3d::Zero();
     for (int i = 0; i < 3; ++i)
       rotNoise(i, i) = std::pow(noiseRotation[i], 2);
 
-    // Information matrix of the distribution
+    // 构建分布的信息矩阵
     Eigen::Matrix<double, 6, 6> information = Eigen::Matrix<double, 6, 6>::Zero();
     information.block<3,3>(0,0) = transNoise.inverse();
     information.block<3,3>(3,3) = rotNoise.inverse();
@@ -81,23 +101,39 @@ Eigen::Matrix<double, 6, 6> SubmapObj::createDRWeights(const DRNoise& dr_noise){
     return information;
 }
 
+/**
+ * @brief 查找并记录给定子图与其他子图之间的重叠情况。
+ * 
+ * 该函数计算给定子图与一组子图中每个子图之间是否存在重叠，并记录重叠的子图索引。它首先清除之前的重叠索引列表，
+ * 然后计算所有子图的角点位置，最后检查这些子图是否与给定子图重叠。
+ * 
+ * @param submaps_in_map_tf 表示子图是否在地图坐标系中。
+ * @param submaps_set 子图集合，包含多个 SubmapObj 对象。
+ * @param overlap_coverage 重叠比例，用于确定最小重叠要求。
+ */
 void SubmapObj::findOverlaps(bool submaps_in_map_tf,
     std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj> > &submaps_set, double overlap_coverage){
 
+    // 清除之前计算的重叠子图索引列表
     overlaps_idx_.clear();
 
+    // 存储所有子图的角点信息，以便后续进行重叠检查
     std::vector<std::pair<int, corners>> corners_set;
+    // 获取当前子图的角点位置
     corners submap_i_corners = std::get<1>(getSubmapCorners(submaps_in_map_tf, *this, overlap_coverage));
-    // Extract corners of all submaps
+    // 提取所有子图的角点信息
     for(SubmapObj& submap_j: submaps_set){
         corners_set.push_back(getSubmapCorners(submaps_in_map_tf, submap_j, overlap_coverage));
     }
 
+    // 标记是否发生重叠
     bool overlap_flag;
+    // 遍历所有子图的角点信息，检查是否存在重叠
     for(unsigned int k=0; k<corners_set.size(); k++){
         overlap_flag = false;
-        // Check each corner of submap_j against the four edges of submap_i
+        // 检查子图 j 的每个角点是否与子图 i 的四条边相交
         overlap_flag = checkSubmapsOverlap(submap_i_corners, std::get<1>(corners_set.at(k)));
+        // 如果发现重叠，则将重叠子图的索引添加到列表中
         if(overlap_flag == true){
             overlaps_idx_.push_back(std::get<0>(corners_set.at(k)));
         }
@@ -105,27 +141,42 @@ void SubmapObj::findOverlaps(bool submaps_in_map_tf,
 }
 
 
+/**
+ * 获取子图的角点信息。
+ * 
+ * 该函数用于计算子图在地图中的角点位置，根据是否已经转换到地图坐标系以及重叠覆盖率来调整角点的位置。
+ * 
+ * 参数：
+ * - submaps_in_map_tf: 布尔值，表示子图是否已经转换到了地图坐标系中。
+ * - submap: SubmapObj 类型的引用，表示要查询的子图对象。
+ * - overlap_coverage: 双精度浮点数，表示重叠覆盖率，用于调整角点的位置。
+ * 
+ * 返回值：
+ * - std::pair<int, corners>: 包含子图ID和角点坐标的对。
+ */
 std::pair<int, corners> getSubmapCorners(bool submaps_in_map_tf, const SubmapObj& submap, double overlap_coverage){
 
-    // Transform point cloud back to map frame
+    // 将点云转换回地图坐标系
     Eigen::MatrixXf points;
     if(submaps_in_map_tf){
+        // 如果子图已经转换到了地图坐标系，则将子图点云逆变换回原始位置
         PointCloudT submap_pcl_aux;
         pcl::transformPointCloud(submap.submap_pcl_, submap_pcl_aux, submap.submap_tf_.inverse().matrix());
         points = submap_pcl_aux.getMatrixXfMap(3,4,0).transpose();
     }
     else{
+        // 如果子图未转换到地图坐标系，则直接使用子图的点云数据
         points = submap.submap_pcl_.getMatrixXfMap(3,4,0).transpose();
     }
 
-    // Extract corners
+    // 提取角点
     double min_x, min_y, max_x, max_y;
-    min_x = points.col(0).minCoeff() * overlap_coverage;   // min x
-    min_y = points.col(1).minCoeff() * overlap_coverage;   // min y
-    max_x = points.col(0).maxCoeff() * overlap_coverage;   // max x
-    max_y = points.col(1).maxCoeff() * overlap_coverage;   // max y
+    min_x = points.col(0).minCoeff() * overlap_coverage;   // 最小x坐标
+    min_y = points.col(1).minCoeff() * overlap_coverage;   // 最小y坐标
+    max_x = points.col(0).maxCoeff() * overlap_coverage;   // 最大x坐标
+    max_y = points.col(1).maxCoeff() * overlap_coverage;   // 最大y坐标
 
-    // 2D transformation of the corners back to original place
+    // 将角点转换回原始位置
 //    Eigen::Isometry2d submap_tf2d = (Eigen::Isometry2d) submap.submap_tf_.linear().cast<double>();
 //    submap_tf2d.translation() = submap.submap_tf_.matrix().block<2,1>(0,3).cast<double>();
 
@@ -135,6 +186,7 @@ std::pair<int, corners> getSubmapCorners(bool submaps_in_map_tf, const SubmapObj
     submap_i_corners.push_back(submap.submap_tf_.cast<double>() * Vector3d(max_x, max_y, 0));
     submap_i_corners.push_back(submap.submap_tf_.cast<double>() * Vector3d(max_x, min_y, 0));
 
+    // 返回子图ID和角点坐标
     return std::make_pair(submap.submap_id_, submap_i_corners);
 }
 
