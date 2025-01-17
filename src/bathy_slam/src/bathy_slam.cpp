@@ -16,7 +16,7 @@ BathySlam::~BathySlam(){
 // rotSampler: 旋转噪声的高斯采样器
 // config: 配置参数
 SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config){
-    // 从文件中加载死区噪声参数
+    // 从文件中加载DR噪声参数
     DRNoise dr_noise = loadDRNoiseFromFile(config);
     // 初始化目标子图并应用DR噪声
     SubmapObj submap_trg(dr_noise);
@@ -26,8 +26,8 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
     ofstream fileOutputStream;
     fileOutputStream.open("loop_closures.txt", std::ofstream::out);
 
-    // 初始化回环闭合的信息阈值
-    double info_thres = 0.1;
+    // 初始化回环闭合的信息阈值，较高的信息阈值意味着更严格的回环闭合筛选标准
+    double info_thres = 0.1; // 信息阈值 原始数值：0.1
     // 遍历每个地面真值子图
     for(SubmapObj& submap_i: submaps_gt){
         // 输出当前子图信息
@@ -65,7 +65,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
 
         // 创建 DR 边 i 并存储（跳过子图 0）
         if(submap_i.submap_id_ != 0 ){
-            std::cout << "DR 边从 " << submap_i.submap_id_ -1 << " 到 " << submap_i.submap_id_<< std::endl;
+            std::cout << "推位边 DR from " << submap_i.submap_id_ -1 << " to " << submap_i.submap_id_<< std::endl;
             graph_obj_->createDREdge(submap_i);
         }
 
@@ -81,15 +81,16 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
                 fileOutputStream << "\n";
             }
 
-            // 注册重叠的子图
+            // 构建目标子地图，合并与当前子图重叠的已注册子地图
             submap_trg = gicp_reg_->constructTrgSubmap(submaps_reg, submap_i.overlaps_idx_, dr_noise);
             if (config["add_gaussian_noise"].as<bool>()) {
                 addNoiseToSubmap(transSampler, rotSampler, submap_i); // 向源子图添加扰动
             }
-
+            // 使用GICP算法对目标子地图和当前子图进行配准，如果配准成功，则更新最终子地图
             if(gicp_reg_->gicpSubmapRegistration(submap_trg, submap_i)){
                 submap_final = submap_i;
             }
+             // 清除目标子地图的点云数据，以便后续使用
             submap_trg.submap_pcl_.clear();
 
             // 创建回环闭合

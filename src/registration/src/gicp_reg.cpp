@@ -78,12 +78,23 @@ void SubmapRegistration::loadConfig(YAML::Node config){
     info_diag_values = config["gicp_info_diag"].as<std::vector<double>>();
 }
 
+/**
+ * 构建目标子地图。
+ * 
+ * 该函数从一组子地图中选择部分重叠的子地图，并将它们合并以形成一个新的目标子地图对象。
+ * 目的是通过组合重叠子地图的信息，构建一个更完整和准确的目标子地图。
+ * 
+ * @param submaps_set 包含一系列子地图对象的向量。
+ * @param overlaps 包含与目标子地图部分重叠的子地图ID的向量。
+ * @param dr_noise 表示航位推算噪声信息，用于初始化目标子地图对象。
+ * @return 返回构建的目标子地图对象。
+ */
 SubmapObj SubmapRegistration::constructTrgSubmap(const SubmapsVec& submaps_set, std::vector<int>& overlaps, const DRNoise& dr_noise){
 
-    // Merge submaps in overlaps into submap_trg
+    // 将重叠的子地图合并到submap_trg中
     
     SubmapObj submap_trg(dr_noise);
-    std::cout << "Target submap consists of: ";
+    std::cout << "目标子地图包含：";
     for(SubmapObj submap_j: submaps_set){
         if(std::find(overlaps.begin(), overlaps.end(), submap_j.submap_id_) != overlaps.end()){
             std::cout << submap_j.submap_id_ << ", ";
@@ -226,30 +237,41 @@ bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj
 }
 
 
+/**
+ * 使用广义迭代最近点（GICP）算法进行子图注册
+ * 该函数通过直接操作点云简化两个子图的注册过程
+ * 
+ * 参数：
+ * @param trg_submap 目标子图，在注册过程中保持固定
+ * @param src_submap 源子图，将被转换以与目标子图对齐
+ * 
+ * 返回值：
+ * @return 布尔值，指示注册过程是否收敛
+ */
 bool SubmapRegistration::gicpSubmapRegistrationSimple(SubmapObj& trg_submap, SubmapObj& src_submap){
 
-    // Copy the originals to work over them
+    // 复制原始点云以便在其上进行操作
     PointCloudT::Ptr src_pcl_ptr (new PointCloudT(src_submap.submap_pcl_));
     PointCloudT::Ptr trg_pcl_ptr (new PointCloudT(trg_submap.submap_pcl_));
 
-    // The Iterative Closest Point algorithm
+    // 执行迭代最近点算法
     gicp_.setInputSource(src_pcl_ptr);
     gicp_.setInputTarget(trg_pcl_ptr);
     gicp_.align (src_submap.submap_pcl_);
 
-    // Apply transform to submap
+    // 将变换应用到源子图
     ret_tf_ =  gicp_.getFinalTransformation();
     this->transformSubmap(src_submap);
 
-    // Check for nan values
+    // 检查是否有无效值（NaN）
     for(int x=0; x<src_submap.submap_lc_info_.array().size(); x++){
         if(isnan(src_submap.submap_lc_info_.array()(x))){
-            throw std::runtime_error("Nan components in the matrix");
+            throw std::runtime_error("矩阵中存在NaN分量");
             std::exit(0);
         }
     }
 
-    // TODO: compute this value properly
+    // TODO: 更合理地计算此值
     bool convergence = (gicp_.hasConverged())? true: false;
     return convergence;
 }

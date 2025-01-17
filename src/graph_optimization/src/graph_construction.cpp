@@ -24,12 +24,23 @@ GraphConstructor::~GraphConstructor(){
 
 }
 
+/**
+ * 在地图构建器中创建一个新的顶点
+ * 
+ * 此函数负责根据提供的子地图对象，在内部图结构中创建一个新的顶点，并将其添加到顶点集合中
+ * 它首先创建一个VertexSE3类型的顶点，然后设置该顶点的ID和估计值（基于子地图的变换）
+ * 
+ * @param submap 子地图对象，包含创建顶点所需的信息，如子地图ID和子地图的变换
+ */
 void GraphConstructor::createNewVertex(SubmapObj& submap){
-
+    // 创建一个新的VertexSE3实例
     VertexSE3* v = new VertexSE3;
+    // 设置顶点的ID为子地图的ID
     v->setId(submap.submap_id_);
+    // 将子地图的变换转换为double类型，并将其作为顶点的估计值
     Eigen::Isometry3d t = submap.submap_tf_.cast<double>();
     v->setEstimate(t);
+    // 将新创建的顶点添加到顶点集合中
     vertices_.push_back(v);
 }
 

@@ -161,7 +161,7 @@ int SolveOptimizationProblem(::ceres::Problem* problem) {
     // 创建Ceres求解器配置选项
     ::ceres::Solver::Options options;
     // 设置最大迭代次数为300
-    options.max_num_iterations = 300;
+    options.max_num_iterations = 100; // 最大迭代次数 原始数据:300
     // 选择线性求解器
     options.linear_solver_type = ::ceres::SPARSE_NORMAL_CHOLESKY;  // 稀疏正规方程，适用于大规模稀疏问题
     // options.linear_solver_type = ::ceres::DENSE_NORMAL_CHOLESKY; // 稠密正规方程
