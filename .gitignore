@@ -2,6 +2,10 @@
 *.pyc
 *.autosave
 
+QWEN.md
+.github/
+docs/
+
 # Folders
 experiments/*
 bin/*

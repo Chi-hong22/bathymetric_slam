@@ -27,7 +27,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
     fileOutputStream.open("loop_closures.txt", std::ofstream::out);
 
     // 初始化回环闭合的信息阈值，较高的信息阈值意味着更严格的回环闭合筛选标准
-    double info_thres = 0.1; // 信息阈值 原始数值：0.1
+    double info_thres = 0.1; // 信息阈值 原始数值：0.1  注意，实际代码中没有使用这个参数
     // 遍历每个地面真值子图
     for(SubmapObj& submap_i: submaps_gt){
         // 输出当前子图信息

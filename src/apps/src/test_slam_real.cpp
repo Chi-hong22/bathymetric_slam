@@ -240,6 +240,7 @@ int main(int argc, char** argv){
     std::cout << "---benchmark_gt---" <<  std::endl;
 
     // 进行离线SLAM
+    // 注意：此处add_benchmark代码在/home/u/code_workplace/cpp/external/auvlib/src/data_tools/src/benchmark.cpp中
     submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
     std::cout << "---build_bathymetric_graphe---" <<  std::endl;
     add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");

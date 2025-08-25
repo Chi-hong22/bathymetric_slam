@@ -133,7 +133,7 @@ double SubmapRegistration::consistencyErrorOverlap(const SubmapObj& trg_submap,
 
 
 /**
- * @brief 使用广义迭代最近点算法（GICP）进行子图注册。
+ * @brief 使用广义迭代最近点算法（GICP）进行子图匹配。
  *
  * 该函数通过GICP算法将源子图（src_submap）与目标子图（trg_submap）对齐，并修改源子图以反映对齐结果。
  * 
