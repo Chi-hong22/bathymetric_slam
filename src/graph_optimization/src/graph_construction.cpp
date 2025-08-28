@@ -10,6 +10,7 @@
  */
 
 #include "graph_optimization/graph_construction.hpp"
+#include "graph_optimization/utils_g2o.hpp"
 
 using namespace Eigen;
 using namespace std;
@@ -187,8 +188,7 @@ void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
 /// Not tested yet!
 void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
 
-    std::random_device rd{};
-    std::mt19937 gen{rd()};
+    std::mt19937& gen = getGlobalNoiseRNG();
     std::normal_distribution<> d{0,0.01};
 
     // Noise for all the DR edges

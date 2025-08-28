@@ -30,6 +30,10 @@ set( CMAKE_BUILD_TYPE "Release" )
 # locations on all platforms.
 include(GNUInstallDirs)
 
+
+# 强制查找并链接 Threads (pthread)
+find_package(Threads REQUIRED)
+
 find_package(Ceres 2.1.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.14.0 REQUIRED)

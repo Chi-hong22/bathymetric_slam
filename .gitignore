@@ -4,7 +4,8 @@
 
 QWEN.md
 .github/
-docs/
+# docs/
+sim_data/250826_sub_maps/
 
 # Folders
 experiments/*

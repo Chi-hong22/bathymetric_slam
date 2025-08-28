@@ -1,15 +1,15 @@
 # Bathymetric Graph SLAM
 
 Baseline SLAM framework for underwater vehicles.
-The algorithm gets a set of bathymetric submaps as input and corrects the global map constructed while refining the vehicle trajectory through a map-to-map registration followed by a pose graph optimization. 
-
+The algorithm gets a set of bathymetric submaps as input and corrects the global map constructed while refining the vehicle trajectory through a map-to-map registration followed by a pose graph optimization.
 
 ![real_data_example](https://github.com/ignaciotb/bathymetric_slam/blob/master/img/graph_borno.png)
 
-
 ## Paper introducing and applying the method
+
 The method implemented is described [in this paper](https://ieeexplore.ieee.org/abstract/document/8968241) and used [in this one](https://arxiv.org/abs/2003.10931)
-```
+
+```bibtex
 @inproceedings{torroba2019towards,
   title={Towards Autonomous Industrial-Scale Bathymetric Surveying},
   author={Torroba, Ignacio and Bore, Nils and Folkesson, John},
@@ -32,17 +32,19 @@ The method implemented is described [in this paper](https://ieeexplore.ieee.org/
 ```
 
 ## Dependencies (tested on Ubuntu 20.04)
-* AUVLIB [nilsbore/auvlib](https://github.com/nilsbore/auvlib?tab=readme-ov-file) 
-* PCL  
-  * [源代码安装教程](https://pcl.readthedocs.io/projects/tutorials/en/latest/compiling_pcl_posix.html) 
-  * [1.14.0版本下载地址](https://github.com/PointCloudLibrary/pcl/releases/download/pcl-1.14.0/source.tar.gz)
-* G2O https://github.com/RainerKuemmerle/g2o
-* Ceres 
-  * [安装教程](http://ceres-solver.org/installation.html)
-  * [ceres-solver-2.1.0版本下载地址](https://github.com/ceres-solver/ceres-solver/archive/refs/tags/2.1.0.tar.gz)
+
+*   AUVLIB [nilsbore/auvlib](https://github.com/nilsbore/auvlib?tab=readme-ov-file)
+*   PCL
+    *   [源代码安装教程](https://pcl.readthedocs.io/projects/tutorials/en/pcl-1.14.0/compiling_pcl_posix.html)
+    *   [1.14.0版本下载地址](https://github.com/PointCloudLibrary/pcl/releases/download/pcl-1.14.0/source.tar.gz)
+*   G2O <https://github.com/RainerKuemmerle/g2o>
+*   Ceres
+    *   [安装教程](http://ceres-solver.org/installation.html)
+    *   [ceres-solver-2.1.0版本下载地址](https://github.com/ceres-solver/ceres-solver/archive/refs/tags/2.1.0.tar.gz)
 
 Note that for G2O to be used by this repo you need to install it at a system level.
-From the G2O build folder, run  
+From the G2O build folder, run
+
 ```bash
 sudo make install
 ```
@@ -50,6 +52,7 @@ sudo make install
 ## Building
 
 Clone this repository and create a `build` folder under the root, then execute
+
 ```bash
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=../install ..
@@ -58,30 +61,49 @@ make install
 ```
 
 Finally, add the following line to your ~/.bashrc file adapted to your own installation
+
 ```bash
 export PATH=$PATH:/path/to/folder/bathymetric_slam/install/share
 ```
+
 ### Available apps
+
 Under `bin` folder.
 The process outputs .png images with the maps of bathymetry and consistency error.
-The current script optimizes the graph with Ceres, but the app outputs a "graph.g2o" file which you can solve with G2O if preferred. 
+The current script optimizes the graph with Ceres, but the app outputs a "graph.g2o" file which you can solve with G2O if preferred.
 
 ##### SLAM with simulated data
-In order to test the framework with data from the [SMARC simulator](https://github.com/smarc-project), use the toy dataset `map_small` under `sim_data`. 
+
+In order to test the framework with data from the [SMARC simulator](https://github.com/smarc-project), use the toy dataset `map_small` under `sim_data`.
 You can visualize both the ground truth map and vehicle trajectory in the visualizer. To start the optimization process, hit "q".
+
 ```bash
 ./bathy_slam_real --simulation yes --bathy_survey ../sim_data/map_small/
 ```
+
 The simulation outputs a measure of the error contained in the map, as well as the height maps and error plots as .png files.
 To increase the complexity of the sim dataset, increase the Gaussian noise to the vehicle's position estimate.
 In order to adapt the performance of the algorithm to the dataset, adjust the weights of the edges of the pose-graph accordingly and tune the GICP and the Ceres solver parameters.
 The algorithm is **not** by default tuned for the toy example `map_small`.
 
 ##### SLAM with real data
+
 To run the SLAM solution with real data from a bathymetric survey, currently the input is in the form of a cereal file containing all the necessary information from your data files.
 You can find a real survey carried out with an ROV [here](https://strands.pdc.kth.se/public/IROS-2019-Bathymetry/). Download it, adjust the framework values, and test it.
-```
+
+```bash
 ./bathy_slam_real --simulation no --bathy_survey /path/to/datasets/mbes_pings.cereal --config config.yaml
 ```
+
 ### Generating your own cereal files from real surveys
+
 Take a look at the [AUVLIB](https://github.com/nilsbore/auvlib) toolbox in order to parse real MBES, SSS, navigation, etc data from the most common formats into .cereal files.
+
+### 文档指南
+
+为了更好地使用和理解本框架，请参考以下详细文档：
+
+- **[输出图片解析指南](docs/output_images_guide.md)**: 详细说明SLAM流程中生成的各种快照图片的含义和分析方法
+- **[参数调优指南](docs/parameter_tuning_guide.md)**: 如何调整算法参数以适应不同的数据集和应用场景
+- **[轨迹结果绘图指南](docs/plot_results_guide.md)**: 如何可视化和分析SLAM轨迹结果
+- **[高斯噪声实现指南](docs/gaussian_noise_guide.md)**: 高斯噪声的实现原理、配置方法和可复现性功能详解

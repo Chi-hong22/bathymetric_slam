@@ -30,6 +30,11 @@
 using namespace std;
 using namespace g2o;
 
+// 全局随机数引擎接口
+void setNoiseRandomSeed(int seed);
+bool isNoiseSeedSet();
+std::mt19937& getGlobalNoiseRNG();
+
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
 typedef pcl::PointXYZ PointT;
 typedef g2o::GaussianSampler<Eigen::Vector3d, Eigen::Matrix3d> GaussianGen;

@@ -86,6 +86,27 @@ template<class Archive>
 void save(Archive & archive,
           SubmapObj const & m)
 {
+    // 新的安全方案（已注释，可在需要时启用）
+    /*
+    try {
+        // 创建数据副本，需要额外内存但更安全
+        Eigen::MatrixXf points(m.submap_pcl_.points.size(), 3);
+        for (size_t i = 0; i < m.submap_pcl_.points.size(); ++i) {
+            points(i, 0) = m.submap_pcl_.points[i].x;  // 复制数据
+            points(i, 1) = m.submap_pcl_.points[i].y;
+            points(i, 2) = m.submap_pcl_.points[i].z;
+        }
+        
+        archive(CEREAL_NVP(m.submap_id_), CEREAL_NVP(m.swath_id_), CEREAL_NVP(points),
+            CEREAL_NVP(m.overlaps_idx_), CEREAL_NVP(m.colors_), CEREAL_NVP(m.submap_tf_.matrix()), CEREAL_NVP(m.submap_info_),
+            CEREAL_NVP(m.auv_tracks_));
+    } catch (const std::exception& e) {
+        std::cerr << "Error in SubmapObj serialization: " << e.what() << std::endl;
+        throw;
+    }
+    */
+    
+    // 原始方案：getMatrixXfMap(3,4,0).transpose() - 内存映射代码有风险但性能更好
     Eigen::MatrixXf points = m.submap_pcl_.getMatrixXfMap(3,4,0).transpose();
     archive(CEREAL_NVP(m.submap_id_), CEREAL_NVP(m.swath_id_), CEREAL_NVP(points),
         CEREAL_NVP(m.overlaps_idx_), CEREAL_NVP(m.colors_), CEREAL_NVP(m.submap_tf_.matrix()), CEREAL_NVP(m.submap_info_),

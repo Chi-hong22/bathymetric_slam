@@ -65,17 +65,17 @@ print("Diff original and optimized", sum_opt)
 #
 # Plots the results for the specified poses.
 figure = plot.figure()
+axes = figure.add_subplot(111, projection='3d')
 
 if poses_original is not None:
-    axes = plot.subplot(1, 1, 1, projection='3d')
-
     plot.plot(poses_original[:, 0],
               poses_original[:, 1],
               poses_original[:, 2],
               '-',
               alpha=0.5,
               color="green",
-              linewidth=2.0)
+              linewidth=2.0,
+              label='Ground Truth')
 
 if poses_corrupted is not None:
     plot.plot(poses_corrupted[:, 0],
@@ -84,7 +84,8 @@ if poses_corrupted is not None:
               '-',
               alpha=0.5,
               color="red",
-              linewidth=2.0)
+              linewidth=2.0,
+              label='Corrupted')
 
 if poses_optimized is not None:
     plot.plot(poses_optimized[:, 0],
@@ -93,8 +94,31 @@ if poses_optimized is not None:
               '-',
               alpha=0.5,
               color="blue",
-              linewidth=2.0)
+              linewidth=2.0,
+              label='Optimized')
 
-plot.title('Trajectories: GT (Green), Corrupted (Red), optimized (Blue)')
+# Set aspect ratio to be based on data ranges for a true-to-scale representation
+all_poses = []
+if poses_original is not None:
+    all_poses.append(poses_original)
+if poses_corrupted is not None:
+    all_poses.append(poses_corrupted)
+if poses_optimized is not None:
+    all_poses.append(poses_optimized)
+
+if all_poses:
+    combined_poses = numpy.vstack(all_poses)
+    min_coords = numpy.min(combined_poses, axis=0)
+    max_coords = numpy.max(combined_poses, axis=0)
+    ranges = max_coords - min_coords
+    # To avoid division by zero or tiny ranges, set a minimum range
+    ranges[ranges < 1e-6] = 1e-6
+    axes.set_box_aspect(ranges)
+
+plot.legend()
+plot.title('Trajectories Comparison')
+plot.xlabel('X')
+plot.ylabel('Y')
+axes.set_zlabel('Z')
 
 plot.show()

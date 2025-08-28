@@ -10,6 +10,39 @@
  */
 
 #include "graph_optimization/utils_g2o.hpp"
+#include <random>
+
+namespace {
+    // 定义一个全局作用域内的匿名命名空间来存放全局变量
+    // 避免了使用 static 关键字可能导致的链接问题，并增强了封装性
+    bool seed_is_set_ = false;
+    // 使用 std::unique_ptr 来管理全局随机数生成器的生命周期
+    // 确保在程序退出时能正确释放资源
+    std::unique_ptr<std::mt19937> global_rng_;
+}
+
+//--- 全局随机数引擎实现 ---//
+void setNoiseRandomSeed(int seed) {
+    // 初始化或重置全局随机数生成器
+    // 使用 make_unique 来安全地创建 std::mt19937 的实例
+    global_rng_ = std::make_unique<std::mt19937>(seed);
+    seed_is_set_ = true;
+}
+
+bool isNoiseSeedSet() {
+    return seed_is_set_;
+}
+
+std::mt19937& getGlobalNoiseRNG() {
+    // 如果种子未被设置，则首次调用时使用随机设备进行初始化
+    // 确保即使在未明确设置种子的情况下，也能获得一个有效的随机数生成器
+    if (!global_rng_) {
+        global_rng_ = std::make_unique<std::mt19937>(std::random_device{}());
+    }
+    return *global_rng_;
+}
+//--- 结束 ---//
+
 
 using namespace std;
 using namespace g2o;
@@ -45,13 +78,20 @@ Matrix<double, 6,6> generateGaussianNoise(GaussianGen& transSampler,
     transSampler.setDistribution(transNoise);
     rotSampler.setDistribution(rotNoise);
 
-    if (randomSeed) {
-      std::random_device r;
-      std::seed_seq seedSeq{r(), r(), r(), r(), r()};
-      vector<int> seeds(2);
-      seedSeq.generate(seeds.begin(), seeds.end());
-      transSampler.seed(seeds[0]);
-      rotSampler.seed(seeds[1]);
+    if (isNoiseSeedSet()) {
+        std::mt19937& rng = getGlobalNoiseRNG();
+        // 使用确定性种子，确保可复现性
+        transSampler.seed(rng());
+        rotSampler.seed(rng());
+    }
+    else {
+        // 保持原有的完全随机行为
+        std::random_device r;
+        std::seed_seq seedSeq{r(), r(), r(), r(), r()};
+        vector<int> seeds(2);
+        seedSeq.generate(seeds.begin(), seeds.end());
+        transSampler.seed(seeds[0]);
+        rotSampler.seed(seeds[1]);
     }
     return information;
 }
@@ -69,8 +109,7 @@ void addNoiseToSubmap(GaussianGen& transSampler,
     qw = 0.;
     cerr << "x";
     }
-    std::random_device rd{};
-    std::mt19937 gen{rd()};
+    std::mt19937& gen = getGlobalNoiseRNG();
     std::normal_distribution<> d{0,0.1};
 
 //    Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());
@@ -117,8 +156,7 @@ void addNoiseToMap(GaussianGen& transSampler,
         Eigen::Quaternionf gtQuat = (Eigen::Quaternionf)meas_i.linear();
         Eigen::Vector3f gtTrans = meas_i.translation();
 
-        std::random_device rd{};
-        std::mt19937 gen{rd()};
+        std::mt19937& gen = getGlobalNoiseRNG();
         std::normal_distribution<> d{0,0.5};
 
         // Bias in yaw

@@ -1,30 +1,31 @@
 # 基准测试画布 imap 尺寸 越大越清晰
-benchmark_nbr_rows: 600  # 800
-benchmark_nbr_cols: 800  # 1200
+benchmark_nbr_rows: 800  # 800
+benchmark_nbr_cols: 1000  # 1200
 
 # 点云下采样参数（单位：米）
-downsampling_leaf_x: .1  # .2
-downsampling_leaf_y: .1 # .2
-downsampling_leaf_z: .05 # .1
+downsampling_leaf_x: .05  # .2
+downsampling_leaf_y: .05 # .2
+downsampling_leaf_z: .25 # .1
 
 # 海底 SLAM 参数
 submap_size: 100  # 每个子地图的 ping 数  原始数据：500
-add_gaussian_noise: false
+add_gaussian_noise: true  # 是否在模拟数据中添加高斯噪声
+noise_seed: 40  # 可选的随机噪声种子, 注释掉或留空则为完全随机
 
 # 子地图重叠放缩系数。参数越小，则对子地图的重叠区域要求越严格。
 # 对当前子图 i 和待检查的子图 j，都用 overlap_coverage 计算出它们缩放后的虚拟边界框。
 # 调用 checkSubmapsOverlap 函数，判断子图 i 的角点是否完全位于子图 j 的（缩放后）边界框内部。
-overlap_coverage: 0.7 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 注意：250113_该参数对结果影响最大 0.5 0.4
+overlap_coverage: 0.6 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 注意：250113_该参数对结果影响最大 0.5 0.4
 
 # GICP 配准参数（单位：米）
-gicp_max_correspondence_distance: 2    # 对应点对的最大距离阈值，超过此距离的点对将被忽略 原始数据：20
+gicp_max_correspondence_distance: 0.15    # 对应点对的最大距离阈值，超过此距离的点对将被忽略 原始数据：20
 gicp_maximum_iterations: 200            # GICP 算法的最大迭代次数 原始数据：200
 gicp_transform_epsilon: 1e-3            # 两次迭代间变换矩阵差异的收敛阈值 1e-3
 gicp_euclidean_fitness_epsilon: 1e-3    # 配准误差收敛阈值，当误差小于此值时停止迭代 1e-3
-gicp_ransac_outlier_rejection_threshold: 0.5  # RANSAC 异常值剔除阈值，用于去除错误匹配 原始数据：1
+gicp_ransac_outlier_rejection_threshold: 0.1  # RANSAC 异常值剔除阈值，用于去除错误匹配 原始数据：1
 gicp_normal_use_knn_search: true        # 是否使用 K 近邻搜索计算法向量
 gicp_normal_search_radius: 10           # 计算法向量时的搜索半径（当 use_knn_search = false）
-gicp_normal_search_k_neighbours: 30     # K 近邻搜索时使用的邻居点数量（当 use_knn_search = true）
+gicp_normal_search_k_neighbours: 15     # K 近邻搜索时使用的邻居点数量（当 use_knn_search = true）
 gicp_info_diag: [100.0, 100.0, 100.0, 10.0]  # 信息矩阵参数说明 原始数据：[10000.0, 10000.0, 10000.0, 1000.0]
 # 信息矩阵对角线元素 [x, y, z, rotation]
 # - 前三个值(10000.0)控制xyz方向的位置约束强度

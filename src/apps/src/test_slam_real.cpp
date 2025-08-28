@@ -117,12 +117,26 @@ void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::s
 
     // 输出优化后的结果到cereal序列化文件
     std::cout << "Output cereal: " << boost::filesystem::basename(output_path) << std::endl;
-    std::ofstream os(boost::filesystem::basename(output_path) + ".cereal", std::ofstream::binary);
-    {
-        // 使用cereal的二进制存档器序列化子地图数据
-        cereal::BinaryOutputArchive oarchive(os);
-        oarchive(submaps_reg);
+    try {
+        std::ofstream os(boost::filesystem::basename(output_path) + ".cereal", std::ofstream::binary);
+        if (!os.is_open()) {
+            std::cerr << "Error: 无法打开输出文件进行写入" << std::endl;
+            return;
+        }
+        
+        // 检查子地图数量和估计的内存使用量
+        std::cout << "正在序列化 " << submaps_reg.size() << " 个子地图..." << std::endl;
+        
+        {
+            // 使用cereal的二进制存档器序列化子地图数据
+            cereal::BinaryOutputArchive oarchive(os);
+            oarchive(submaps_reg);
+        }
         os.close();
+        std::cout << "序列化完成" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Cereal序列化错误: " << e.what() << std::endl;
+        std::cerr << "可能的原因: 内存不足或数据过大" << std::endl;
     }
     std::cout << "已进行图优化，按空格键继续" << std::endl;
 }
@@ -169,6 +183,13 @@ int main(int argc, char** argv){
     YAML::Node config = YAML::LoadFile(config_path);
     std::cout << "已加载 Config file: " << config_path << std::endl;
     DRNoise dr_noise = loadDRNoiseFromFile(config);
+
+    // 设置高斯噪声的随机种子
+    if (config["noise_seed"]) {
+        int seed = config["noise_seed"].as<int>();
+        setNoiseRandomSeed(seed);
+        std::cout << "高斯噪声种子已设置为: " << seed << std::endl;
+    }
 
     // Parse submaps from cereal file
     //解析输入数据并生成子地图
