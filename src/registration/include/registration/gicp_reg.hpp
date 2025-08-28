@@ -53,7 +53,8 @@ public:
 
     void loadConfig(YAML::Node config);//加载配置参数
 
-    bool gicpSubmapRegistration(SubmapObj &trg_submap, SubmapObj &src_submap);//对目标子地图和源子地图进行配准
+    bool gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj& src_submap,
+                                const Eigen::Matrix4f& init_guess);
 
     bool gicpSubmapRegistrationSimple(SubmapObj& trg_submap, SubmapObj& src_submap);//简化配准方法
 

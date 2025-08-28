@@ -34,6 +34,7 @@ using namespace g2o;
 void setNoiseRandomSeed(int seed);
 bool isNoiseSeedSet();
 std::mt19937& getGlobalNoiseRNG();
+int getCurrentNoiseSeed();  // 获取当前使用的噪声种子
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
 typedef pcl::PointXYZ PointT;

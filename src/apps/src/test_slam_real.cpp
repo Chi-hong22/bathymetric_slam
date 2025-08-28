@@ -92,8 +92,10 @@ void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& subm
     std::cout << "是否添加高斯噪声 = " << add_gaussian_noise << std::endl;
     if (add_gaussian_noise) {
         // 向图中的边添加噪声
+        int usedSeed = getCurrentNoiseSeed();
+        std::cout << "正在使用种子 " << usedSeed << " 添加高斯噪声到图边..." << std::endl;
         graph_obj.addNoiseToGraph(transSampler, rotSampler);
-        std::cout << "已向图添加高斯噪声" << std::endl;
+        std::cout << "已成功向图添加高斯噪声" << std::endl;
     }
     // 创建初始DR链并可视化
     graph_obj.createInitialEstimate(submaps_reg);
@@ -188,7 +190,9 @@ int main(int argc, char** argv){
     if (config["noise_seed"]) {
         int seed = config["noise_seed"].as<int>();
         setNoiseRandomSeed(seed);
-        std::cout << "高斯噪声种子已设置为: " << seed << std::endl;
+        std::cout << "高斯噪声种子已设置为: " << seed << " (用户指定)" << std::endl;
+    } else {
+        std::cout << "未指定噪声种子，将使用随机种子" << std::endl;
     }
 
     // Parse submaps from cereal file
@@ -241,6 +245,11 @@ int main(int argc, char** argv){
     //初始化噪声生成器和基准测试对象，用于后续的误差评估。
     GaussianGen transSampler, rotSampler;
     Matrix<double, 6,6> information = generateGaussianNoise(transSampler, rotSampler);
+    
+    // 显示实际使用的噪声种子
+    int actualSeed = getCurrentNoiseSeed();
+    std::cout << "=== 噪声系统已初始化 ===" << std::endl;
+    std::cout << "实际使用的噪声种子: " << actualSeed << std::endl;
 
     // flag for adding gaussian noise to submaps and graph
     bool add_gaussian_noise = config["add_gaussian_noise"].as<bool>();

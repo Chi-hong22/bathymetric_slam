@@ -186,18 +186,29 @@ void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
 }
 
 /// Not tested yet!
+/**
+ * @brief 为图中的DR边添加噪声，生成带噪声的测量值
+ * 
+ * 该函数遍历所有的DR边，对每条边的位姿测量值添加噪声，
+ * 包括旋转噪声和平移噪声，用于模拟真实传感器的测量误差。
+ * 
+ * @param transSampler 平移噪声采样器，用于生成平移方向的噪声样本
+ * @param rotSampler 旋转噪声采样器，用于生成旋转方向的噪声样本
+ * 
+ * @note 该函数会直接修改类成员变量drMeas_中的测量值
+ */
 void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
 
     std::mt19937& gen = getGlobalNoiseRNG();
-    std::normal_distribution<> d{0,0.01};
+    std::normal_distribution<> d{0,0.005}; // 实际应用的yaw噪声分布——原参数 0.01 
 
-    // Noise for all the DR edges
+    // 为所有DR边添加噪声
     for (size_t i = 0; i < drEdges_.size(); ++i) {
       Eigen::Isometry3d meas_i = drMeas_.at(i);
       Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)meas_i.linear();
       Eigen::Vector3d gtTrans = meas_i.translation();
 
-      // Bias in yaw
+      // 添加偏航角偏差噪声
       double roll = 0.0, pitch = 0.0, yaw = /*0.001*/ d(gen);
       Matrix3d m;
       m = AngleAxisd(roll, Vector3d::UnitX())
@@ -217,6 +228,7 @@ void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& r
 //      trans = transSampler.generateSample();
       trans.setZero();
 
+      // 将噪声与真实值合成
       rot = gtQuat * rot;
       trans = gtTrans + trans;
 

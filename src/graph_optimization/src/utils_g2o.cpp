@@ -16,6 +16,7 @@ namespace {
     // 定义一个全局作用域内的匿名命名空间来存放全局变量
     // 避免了使用 static 关键字可能导致的链接问题，并增强了封装性
     bool seed_is_set_ = false;
+    int current_seed_ = 0;  // 记录当前使用的种子值
     // 使用 std::unique_ptr 来管理全局随机数生成器的生命周期
     // 确保在程序退出时能正确释放资源
     std::unique_ptr<std::mt19937> global_rng_;
@@ -27,6 +28,7 @@ void setNoiseRandomSeed(int seed) {
     // 使用 make_unique 来安全地创建 std::mt19937 的实例
     global_rng_ = std::make_unique<std::mt19937>(seed);
     seed_is_set_ = true;
+    current_seed_ = seed;  // 记录用户设置的种子
 }
 
 bool isNoiseSeedSet() {
@@ -37,9 +39,17 @@ std::mt19937& getGlobalNoiseRNG() {
     // 如果种子未被设置，则首次调用时使用随机设备进行初始化
     // 确保即使在未明确设置种子的情况下，也能获得一个有效的随机数生成器
     if (!global_rng_) {
-        global_rng_ = std::make_unique<std::mt19937>(std::random_device{}());
+        std::random_device rd;
+        current_seed_ = rd();  // 记录自动生成的随机种子
+        global_rng_ = std::make_unique<std::mt19937>(current_seed_);
     }
     return *global_rng_;
+}
+
+int getCurrentNoiseSeed() {
+    // 确保RNG已初始化（这会自动设置种子如果还没有的话）
+    getGlobalNoiseRNG();
+    return current_seed_;
 }
 //--- 结束 ---//
 
@@ -96,24 +106,37 @@ Matrix<double, 6,6> generateGaussianNoise(GaussianGen& transSampler,
     return information;
 }
 
+/**
+ * @brief 为子地图添加噪声，模拟传感器或位姿估计中的不确定性
+ * 
+ * 该函数通过添加高斯噪声来扰动子地图的位姿变换（平移和旋转），
+ * 并使用扰动后的位姿对点云进行变换，从而生成带有噪声的子地图。
+ * 
+ * @param transSampler 平移噪声生成器，用于生成平移方向上的高斯噪声样本（当前未启用）
+ * @param rotSampler 旋转噪声生成器，用于生成旋转方向上的高斯噪声样本
+ * @param submap 子地图对象，包含原始点云和位姿变换，函数将直接修改其内容
+ */
 void addNoiseToSubmap(GaussianGen& transSampler,
                       GaussianGen& rotSampler,
                       SubmapObj& submap){
 
+    // 提取子地图当前的旋转四元数和平移向量
     Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)submap.submap_tf_.linear().cast<double>();
     Eigen::Vector3d gtTrans = submap.submap_tf_.translation().cast<double>();
 
+    // 从旋转采样器中生成一个旋转噪声样本，并构造扰动四元数
     Eigen::Vector3d quatXYZ = rotSampler.generateSample();
     double qw = 1.0 - quatXYZ.norm();
     if (qw < 0) {
-    qw = 0.;
-    cerr << "x";
+        qw = 0.;
+        cerr << "x"; // 表示四元数归一化失败
     }
-    std::mt19937& gen = getGlobalNoiseRNG();
-    std::normal_distribution<> d{0,0.1};
 
-//    Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());
-    // Bias in yaw
+    // 当前代码中未启用平移噪声，而是引入了一个偏置在 yaw 方向的微小旋转噪声
+    std::mt19937& gen = getGlobalNoiseRNG();
+    std::normal_distribution<> d{0,0.05}; // yaw噪声 原参数0.1弧度(5.73°)
+
+    // 构造 yaw 方向的小角度旋转作为扰动
     double roll = 0.0, pitch = 0.0, yaw = /*0.001*/ d(gen);
     Matrix3d m;
     m = AngleAxisd(roll, Vector3d::UnitX())
@@ -121,45 +144,61 @@ void addNoiseToSubmap(GaussianGen& transSampler,
         * AngleAxisd(yaw, Vector3d::UnitZ());
     Eigen::Quaterniond rot(m);
 
+    // 当前未启用平移噪声
     Eigen::Vector3d trans;
-//    trans = transSampler.generateSample();
     trans.setZero();
 
+    // 将噪声叠加到原始位姿上：先叠加平移，再叠加旋转
     trans = gtTrans + trans;
     rot = gtQuat * rot;
 
+    // 构造带噪声的位姿变换
     Eigen::Isometry3d noisyMeasurement = (Eigen::Isometry3d) rot;
     noisyMeasurement.translation() = trans;
 
-    // Transform submap_i pcl and tf
+    // 使用带噪声的位姿对点云进行变换，并更新子地图的位姿
     pcl::transformPointCloud(submap.submap_pcl_, submap.submap_pcl_,
                              (noisyMeasurement.cast<float>() * submap.submap_tf_.inverse()).matrix());
 
     submap.submap_tf_ = noisyMeasurement.cast<float>();
 }
 
+/**
+ * @brief 【未使用】为子地图序列添加噪声，模拟传感器或运动过程中的不确定性。
+ *
+ * 该函数对输入的子地图集合（submap_set）中除第一个外的每一个子地图，
+ * 根据前一个子地图的位姿，计算当前子地图相对变换，并加入高斯噪声，
+ * 然后更新当前子地图的点云和位姿。
+ *
+ * @param transSampler 用于平移噪声采样的高斯分布生成器（未使用）
+ * @param rotSampler   用于旋转噪声采样的高斯分布生成器（未使用）
+ * @param submap_set   子地图集合，每个子地图包含点云和位姿信息
+ */
 void addNoiseToMap(GaussianGen& transSampler,
                    GaussianGen& rotSampler,
                    SubmapsVec& submap_set){
 
+    // 打印每个子地图与其前一个子地图之间的变换矩阵（调试用途）
     for (size_t i =1; i < submap_set.size(); i++){
-
         std::cout << i << " -------" << std::endl;
         std::cout << submap_set.at(i-1).submap_tf_.matrix() << std::endl;
-
     }
-    // Noise for all the submaps
+
+    // 遍历所有子地图，从第二个开始，为其添加噪声
     for (size_t i =1; i < submap_set.size(); i++){
+        // 获取前一个子地图的位姿
         Eigen::Isometry3f tf_prev = submap_set.at(i-1).submap_tf_;
 
+        // 计算当前子地图相对于前一个子地图的真实变换
         Eigen::Isometry3f meas_i = tf_prev.inverse() * submap_set.at(i).submap_tf_;
         Eigen::Quaternionf gtQuat = (Eigen::Quaternionf)meas_i.linear();
         Eigen::Vector3f gtTrans = meas_i.translation();
 
+        // 初始化随机数生成器和正态分布（标准差为0.5）
         std::mt19937& gen = getGlobalNoiseRNG();
         std::normal_distribution<> d{0,0.5};
 
-        // Bias in yaw
+        // 仅在偏航角（yaw）方向添加噪声，roll 和 pitch 保持为 0
         float roll = 0.0, pitch = 0.0, yaw = /*0.5*/ d(gen);
         Matrix3f m;
         m = AngleAxisf(roll, Vector3f::UnitX())
@@ -167,22 +206,27 @@ void addNoiseToMap(GaussianGen& transSampler,
             * AngleAxisf(yaw, Vector3f::UnitZ());
         Eigen::Quaternionf rot(m);
 
+        // 将噪声旋转与真实旋转结合
         rot = gtQuat * rot;
 
+        // 构造带噪声的相对变换（平移部分保持不变）
         meas_i = (Eigen::Isometry3f) rot;
         meas_i.translation() = gtTrans;
 
+        // 计算加入噪声后的当前子地图估计位姿
         Eigen::Isometry3f estimate_i = tf_prev * meas_i;
 
+        // 输出调试信息
         std::cout << i << " -------" << std::endl;
         std::cout << tf_prev.matrix() << std::endl;
         std::cout << meas_i.matrix() << std::endl;
         std::cout << estimate_i.matrix() << std::endl;
 
-        // Transform submap_i pcl and tf
+        // 使用估计位姿对当前子地图的点云进行变换
         pcl::transformPointCloud(submap_set.at(i).submap_pcl_, submap_set.at(i).submap_pcl_,
                                  (estimate_i * submap_set.at(i).submap_tf_.inverse()).matrix());
 
+        // 更新当前子地图的位姿为加入噪声后的估计值
         submap_set.at(i).submap_tf_ = estimate_i.cast<float>();
     }
 }

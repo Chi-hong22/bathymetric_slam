@@ -142,7 +142,8 @@ double SubmapRegistration::consistencyErrorOverlap(const SubmapObj& trg_submap,
  * 
  * @return 返回布尔值，表示GICP算法是否成功收敛。如果算法收敛则返回true，否则返回false。
  */
-bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj& src_submap){
+bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj& src_submap,
+                                                const Eigen::Matrix4f& init_guess){
     //N.B. this function modifies the src_submap when aligning it to
 
     // 复制原始点云数据以便在副本上操作
@@ -199,7 +200,7 @@ bool SubmapRegistration::gicpSubmapRegistration(SubmapObj& trg_submap, SubmapObj
     gicp_.setInputTarget(trg_pcl_ptr);
     gicp_.setSourceCovariances(covs_src_ptr);
     gicp_.setTargetCovariances(covs_trg_ptr);
-    gicp_.align (src_submap.submap_pcl_);
+    gicp_.align (src_submap.submap_pcl_, init_guess);
 
     // 应用变换到子图
     ret_tf_ =  gicp_.getFinalTransformation();

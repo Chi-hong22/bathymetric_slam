@@ -84,10 +84,22 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
             // 构建目标子地图，合并与当前子图重叠的已注册子地图
             submap_trg = gicp_reg_->constructTrgSubmap(submaps_reg, submap_i.overlaps_idx_, dr_noise);
             if (config["add_gaussian_noise"].as<bool>()) {
-                addNoiseToSubmap(transSampler, rotSampler, submap_i); // 向源子图添加扰动
+                addNoiseToSubmap(transSampler, rotSampler, submap_i); // 向子地图添加误差扰动
             }
+
+            // Compute initial guess for GICP
+            Eigen::Matrix4f tf_i = submap_i.submap_tf_.matrix();
+            // We use the pose of the first overlapping submap as the reference for the target
+            Eigen::Matrix4f tf_trg = submaps_reg.at(submap_i.overlaps_idx_.at(0)).submap_tf_.matrix();
+            // Eigen::Matrix4f initial_guess = tf_trg.inverse() * tf_i;
+            Eigen::Matrix4f initial_guess = Eigen::Matrix4f::Identity();
+
+            // 输出初始猜测矩阵到终端
+            std::cout << "GICP初始猜测矩阵 (子图 " << submap_i.submap_id_ << " -> 目标子图):" << std::endl;
+            std::cout << initial_guess << std::endl;
+
             // 使用GICP算法对目标子地图和当前子图进行配准，如果配准成功，则更新最终子地图
-            if(gicp_reg_->gicpSubmapRegistration(submap_trg, submap_i)){
+            if(gicp_reg_->gicpSubmapRegistration(submap_trg, submap_i, initial_guess)){
                 submap_final = submap_i;
             }
              // 清除目标子地图的点云数据，以便后续使用
