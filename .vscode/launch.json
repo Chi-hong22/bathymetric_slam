@@ -11,9 +11,9 @@
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/shortTest_PCD_sub_maps/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/PCD_sub_maps/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/noNESP/","--config","../config.yaml"],
-            "args": ["--simulation","yes","--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS_shortTest/","--config","../config.yaml"],
+            // "args": ["--simulation","yes","--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS_shortTest/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS/","--config","../config.yaml"],
-            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250826_sub_maps/noNESP_noINS/","--config","../config.yaml"],
+            "args": ["--simulation","yes", "--bathy_survey","../sim_data/250826_sub_maps/noNESP_noINS/","--config","../config.yaml"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [],
@@ -34,7 +34,7 @@
             "preLaunchTask": "Build"
         },
                 {
-            "name": "Python：绘制 SLAM 结果",
+            "name": "Python：绘制全部 SLAM 结果",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/scripts/plot_results.py",
@@ -45,9 +45,32 @@
                 "--corrupted_poses",
                 "build/poses_corrupted.txt",
                 "--optimized_poses",
-                "build/poses_optimized.txt"
+                "build/poses_optimized.txt",
+                "--save_fig",
+                "result.png",
+                "--dpi",
+                "600",
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+                {
+            "name": "Python：（无误差路径）绘制 SLAM 结果",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/plot_results.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--initial_poses",
+                "build/poses_original.txt",
+                "--optimized_poses",
+                "build/poses_optimized.txt",
+                "--save_fig",
+                "result.png",
+                "--dpi",
+                "600",
             ],
             "cwd": "${workspaceFolder}"
         }
+
     ]
 }
