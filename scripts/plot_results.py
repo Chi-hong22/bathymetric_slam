@@ -146,7 +146,7 @@ if poses_corrupted is not None:
                   poses_corrupted[:, 1],
                   poses_corrupted[:, 2],
                   '-',
-                  alpha=0.8,
+                  alpha=0.7,
                   color="red",
                   linewidth=1.5,
                   label='Corrupted')
@@ -154,7 +154,7 @@ if poses_corrupted is not None:
         plot.plot(poses_corrupted[:, 0],
                   poses_corrupted[:, 1],
                   '-',
-                  alpha=0.8,
+                  alpha=0.7,
                   color="red",
                   linewidth=1.5,
                   label='Corrupted')
