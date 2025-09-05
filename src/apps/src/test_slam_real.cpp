@@ -283,8 +283,19 @@ int main(int argc, char** argv){
     // 创建初始图估计
     create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
     std::cout << "---create_initial_graph_estimate---" <<  std::endl;
+    // 动态重算 range：本阶段因注入误差/初始估计后位姿变换，XY 可能越过以 GT±K 固定的画布，
+    // 这里基于当前阶段点云包围盒刷新 track 映射参数，防止越界（注意：仅本阶段像素坐标系与其他阶段不同）。
+    {
+        PointsT map_dyn = pclToMatrixSubmap(submaps_reg);
+        benchmark.track_img_params(map_dyn, /*compute_range_from_points=*/true);
+    }
     add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
     std::cout << "-4_After_init_graph_estimates_reg-" <<  std::endl;
+    // 动态重算 range：优化前同样可能出现越界，重复基于点云更新映射参数，保证出图完整
+    {
+        PointsT map_dyn = pclToMatrixSubmap(submaps_reg);
+        benchmark.track_img_params(map_dyn, /*compute_range_from_points=*/true);
+    }
     add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
     std::cout << "-5_before_optimize_graph-" <<  std::endl;
 
