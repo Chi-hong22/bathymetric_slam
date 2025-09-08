@@ -103,6 +103,7 @@ Take a look at the [AUVLIB](https://github.com/nilsbore/auvlib) toolbox in order
 
 为了更好地使用和理解本框架，请参考以下详细文档：
 
+- **[输出文件格式说明](docs/OUTPUT_FORMAT.md)**: 详细说明poses_original.txt等输出文件的格式和使用方法
 - **[输出图片解析指南](docs/output_images_guide.md)**: 详细说明SLAM流程中生成的各种快照图片的含义和分析方法
 - **[参数调优指南](docs/parameter_tuning_guide.md)**: 如何调整算法参数以适应不同的数据集和应用场景
 - **[轨迹结果绘图指南](docs/plot_results_guide.md)**: 如何可视化和分析SLAM轨迹结果

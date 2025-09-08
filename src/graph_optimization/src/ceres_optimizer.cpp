@@ -191,7 +191,21 @@ int SolveOptimizationProblem(::ceres::Problem* problem) {
     return summary.iterations.size();
 }
 
-// Output the poses to the file with format: id x y z q_x q_y q_z q_w.
+/**
+ * Output the poses to the file with format: id x y z q_x q_y q_z q_w
+ * 输出位姿到文件，格式为: id x y z q_x q_y q_z q_w
+ * 
+ * @param filename Output filename (e.g., "poses_original.txt", "poses_optimized.txt")
+ * @param poses Map of poses to output
+ * @return true if successful, false otherwise
+ * 
+ * Format details:
+ * - id: integer pose identifier
+ * - x y z: 3D position coordinates in meters
+ * - q_x q_y q_z q_w: quaternion components (converted from internal Euler angles)
+ * 
+ * See docs/OUTPUT_FORMAT.md for detailed format documentation.
+ */
 bool OutputPoses(const std::string& filename, const MapOfPoses& poses) {
     std::fstream outfile;
     outfile.open(filename.c_str(), std::istream::out);
@@ -235,7 +249,8 @@ MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
     CHECK(::ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
         << "Error reading the file: " << outFilename;
 
-    // 输出初始位姿到文件
+    // 输出初始位姿到文件 (包含噪声的原始位姿)
+    // Output initial poses to file (original poses with noise/corruption)
     CHECK(::ceres::optimizer::OutputPoses("poses_corrupted.txt", poses))
         << "Error outputting to poses_corrupted.txt";
 
@@ -252,6 +267,7 @@ MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
 //        << "The solve was not successful, exiting.";
 
     // 输出优化后的位姿到文件
+    // Output optimized poses to file  
     CHECK(::ceres::optimizer::OutputPoses("poses_optimized.txt", poses))
         << "Error outputting to poses_optimized.txt";
 
@@ -282,6 +298,15 @@ void updateSubmapsCeres(const ::ceres::optimizer::MapOfPoses& poses, SubmapsVec&
 }
 
 
+/**
+ * 保存原始轨迹到poses_original.txt文件
+ * Save original trajectory to poses_original.txt file
+ * 
+ * This function creates a graph from the submap set and outputs the original 
+ * (ground truth) poses before any optimization or corruption.
+ * 
+ * @param submaps_set Vector of submap objects containing original poses
+ */
 void saveOriginalTrajectory(SubmapsVec& submaps_set){
 
     covs covs_lc;
@@ -303,6 +328,8 @@ void saveOriginalTrajectory(SubmapsVec& submaps_set){
     CHECK(::ceres::optimizer::ReadG2oFile(outFilename, &poses, &constraints))
         << "Error reading the file: " << outFilename;
 
+    // 输出原始轨迹位姿到文件 (真实轨迹，无噪声)
+    // Output original trajectory poses to file (ground truth, no noise)
     CHECK(::ceres::optimizer::OutputPoses("poses_original.txt", poses))
         << "Error outputting to poses_original.txt";
 }
