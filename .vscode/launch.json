@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) 启动",
+            "name": "SLAM算法调试 (gdb) 启动",
             "type": "cppdbg",
             "request": "launch",
             "program": "/home/u/code_workplace/cpp/bathymetric_slam/bin/bathy_slam_real",
@@ -13,7 +13,11 @@
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/noNESP/","--config","../config.yaml"],
             // "args": ["--simulation","yes","--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS_shortTest/","--config","../config.yaml"],
             "args": ["--simulation","yes", "--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS/","--config","../config.yaml"],
-            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250826_sub_maps/noNESP_noINS/","--config","../config.yaml"],
+            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251111_sub_maps/NESP_noINS/","--config","../config.yaml"],
+            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS/","--config","../config.yaml"],
+            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS_shortest/","--config","../config.yaml"],
+            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250911_sub_maps/Comb_noINS/","--config","../config.yaml"],
+
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [],
@@ -45,7 +49,30 @@
                 "--corrupted_poses",
                 "build/poses_corrupted.txt",
                 "--optimized_poses",
-                "build/poses_optimized.txt"
+                "build/poses_optimized.txt",
+                "--save_fig",
+                "build/",
+                "--dpi",
+                "600"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python：APT 分析 poses_optimized",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/plot_apt.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--estimated",
+                "build/poses_optimized.txt",
+                "--ground_truth",
+                "build/poses_original.txt",
+                "--verbose",
+                "--prefix",
+                "optimized",
+                "--save_fig",
+                "build/"
             ],
             "cwd": "${workspaceFolder}"
         },
@@ -65,25 +92,6 @@
                 "--verbose",
                 "--prefix",
                 "optimized"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "Python：ATE 分析 poses_corrupted (SE3对齐)",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/scripts/plot_ate.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--estimated",
-                "build/poses_corrupted.txt",
-                "--ground_truth",
-                "build/poses_original.txt",
-                "--alignment_type",
-                "se3",
-                "--verbose",
-                "--prefix",
-                "corrupted"
             ],
             "cwd": "${workspaceFolder}"
         }

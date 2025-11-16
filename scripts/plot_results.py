@@ -32,7 +32,7 @@ parser.add_option("--output_file",
                   help="The output file.")
 parser.add_option("--save_fig",
                   dest="save_fig",
-                  default="",
+                  default="build/",
                   help="Save figure to specified path or directory.")
 parser.add_option("--no_show",
                   action="store_true",

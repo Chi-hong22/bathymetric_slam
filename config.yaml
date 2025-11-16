@@ -1,5 +1,5 @@
 # 基准测试画布 imap 尺寸 越大越清晰
-benchmark_nbr_rows: 800  # 800
+benchmark_nbr_rows: 1200  # 800
 benchmark_nbr_cols: 1200  # 1200
 
 # 点云下采样参数（单位：米）
@@ -10,13 +10,16 @@ downsampling_leaf_z: .05 # .1  .25
 # 海底 SLAM 参数
 submap_size: 100  # 每个子地图的 ping 数  原始数据：500
 add_gaussian_noise: true  # 是否在模拟数据中添加高斯噪声
-noise_seed: 40  # 可选的随机噪声种子, 注释掉或留空则为完全随机
-# sim_data/250826_sub_maps/NESP_noINS_shortTest：seed 40 
+noise_seed: 10  # 可选的随机噪声种子, 注释掉或留空则为完全随机
+# sim_data/250826_sub_maps/NESP_noINS_shortTest：seed 40  20
 
 # 子地图重叠放缩系数。参数越小，则对子地图的重叠区域要求越严格。
 # 对当前子图 i 和待检查的子图 j，都用 overlap_coverage 计算出它们缩放后的虚拟边界框。
 # 调用 checkSubmapsOverlap 函数，判断子图 i 的角点是否完全位于子图 j 的（缩放后）边界框内部。
-overlap_coverage: 0.6 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 注意：250113_该参数对结果影响最大 0.5 0.4
+overlap_coverage: 0.6 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 
+# 250828 NESP 0.6 
+# 250828 noNESP 0.5
+# 250911 Comb 0.5
 
 # GICP 配准参数（单位：米）
 gicp_max_correspondence_distance: 0.1    # 对应点对的最大距离阈值，超过此距离的点对将被忽略 原始数据：20
@@ -43,10 +46,10 @@ gicp_info_diag: [100.0, 100.0, 10.0, 10.0]  # 信息矩阵参数说明 原始数
 # 值越大，表示越不信任里程计，优化时会更倾向于采纳闭环边的修正。
 dr_noise_x: 5.
 dr_noise_y: 5.
-dr_noise_z: 0.1
+dr_noise_z: 0.0001      # 0.1
 dr_noise_roll: 1e-4
 dr_noise_pitch: 1e-4
-dr_noise_yaw: 1e-2
+dr_noise_yaw: 1e-2  # 1e-2
 
 # 回环边协方差计算方法
 # 0 = 固定外部值
