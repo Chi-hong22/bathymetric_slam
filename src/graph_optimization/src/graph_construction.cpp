@@ -11,6 +11,8 @@
 
 #include "graph_optimization/graph_construction.hpp"
 #include "graph_optimization/utils_g2o.hpp"
+// 使用派生随机流需要固定宽度整数
+#include <cstdint>
 
 using namespace Eigen;
 using namespace std;
@@ -199,8 +201,10 @@ void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
  */
 void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
 
-    std::mt19937& gen = getGlobalNoiseRNG();
-    std::normal_distribution<> d{0,0.005}; // 实际应用的yaw噪声分布——原参数 0.01 
+    // 图边噪声采用独立盐值，确保与子图扰动互不影响
+    constexpr std::uint64_t kGraphStreamSalt = 0xE5D941F3ULL;
+    auto gen = createDerivedNoiseRNG(kGraphStreamSalt);
+    std::normal_distribution<> d{0,0.005}; // 实际应用的yaw噪声分布——原参数 0.005 
 
     // 为所有DR边添加噪声
     for (size_t i = 0; i < drEdges_.size(); ++i) {

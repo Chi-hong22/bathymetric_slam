@@ -54,7 +54,7 @@ noise_seed: 42             # 可选的随机噪声种子，注释掉或留空则
 #### 1.3 共同特点
 - **噪声维度**: 仅在旋转的yaw轴（航向角）上实际添加噪声
 - **噪声分布**: 正态分布，均值为0
-- **种子控制**: 两个阶段都使用同一个全局随机数生成器，受`noise_seed`统一控制
+- **种子控制**: 两个阶段通过 `createDerivedNoiseRNG()` 从同一个 `noise_seed` 派生出独立随机流，即使调用顺序不同也保持一致
 - **被禁用的噪声**: 平移噪声和roll/pitch旋转噪声在代码中被注释掉
 
 ### 2. 噪声参数与随机种子的作用机制
@@ -145,14 +145,28 @@ rotSampler.seed(rng());                   // 总是得到相同的种子值B
 - 相同参数 + 相同种子 = **完全相同的噪声序列**
 - 实现了噪声的可复现性
 
-#### 2.5 实际应用示例
+#### 2.5 派生随机流机制
+
+为避免“前端/后端”在同一随机序列上争用，本轮更新在 `utils_g2o.cpp` 中新增了 `createDerivedNoiseRNG(stream_key)`：
+
+- **单一基种子**：`noise_seed` 依旧只配置一次，通过 `setNoiseRandomSeed()` 记录在全局状态。
+- **SplitMix64 派生**：`createDerivedNoiseRNG` 使用 SplitMix64 将“基种子 + 流标识（stream_key）”打散，生成确定性的子种子。
+- **场景专属流**：
+  - 子图噪声：`stream_key = 0xB37C4A93 ^ submap_id`
+  - 图边噪声：`stream_key = 0xE5D941F3`
+  - 其它潜在模块也可以自行定义盐值，互不干扰。
+
+这样即使某个阶段的调用次数因数据集大小而变化，另一个阶段也不会受到影响，从根本上解决了“大数据集结果不同”的问题。
+
+#### 2.6 实际应用示例
 
 在图边噪声添加中的体现：
 
 ```cpp
 void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
-    std::mt19937& gen = getGlobalNoiseRNG();  // 获取（可能确定性的）随机数生成器
-    std::normal_distribution<> d{0, 0.01};    // yaw噪声分布：均值0，标准差0.01
+    constexpr std::uint64_t kGraphStreamSalt = 0xE5D941F3ULL;
+    auto gen = createDerivedNoiseRNG(kGraphStreamSalt);  // 基于 noise_seed 派生独立随机流
+    std::normal_distribution<> d{0, 0.01};               // yaw噪声分布：均值0，标准差0.01
     
     for (size_t i = 0; i < drEdges_.size(); ++i) {
         double yaw = d(gen);  // 从分布中采样yaw噪声值
@@ -161,10 +175,10 @@ void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& r
 }
 ```
 
-- **无种子**：每次运行，`gen`状态不同，`d(gen)`产生不同序列
-- **有种子**：每次运行，`gen`初始状态相同，`d(gen)`产生相同序列
+- **无种子**：每次运行，`createDerivedNoiseRNG` 会基于新的随机设备种子派生不同流
+- **有种子**：相同 `noise_seed` + 相同 `stream_salt` → 完全一致的序列
 
-#### 2.6 类比理解
+#### 2.7 类比理解
 
 可以这样理解噪声参数与随机种子的关系：
 
@@ -184,6 +198,7 @@ void setNoiseRandomSeed(int seed);      // 设置全局随机种子
 bool isNoiseSeedSet();                  // 检查种子是否已设置
 std::mt19937& getGlobalNoiseRNG();      // 获取全局随机数生成器
 int getCurrentNoiseSeed();              // 获取当前使用的噪声种子
+std::mt19937 createDerivedNoiseRNG(std::uint64_t stream_key); // 基于种子的独立随机流
 ```
 
 #### 3.2 噪声生成器初始化 (`generateGaussianNoise`)
@@ -273,7 +288,7 @@ if (config["add_gaussian_noise"].as<bool>()) {
 // 数据流:
 输入: SubmapObj submap_i (原始子地图)
 ├── 提取当前位姿: submap.submap_tf_
-├── 生成yaw噪声: std::normal_distribution<>{0, 0.1}(getGlobalNoiseRNG())
+├── 生成yaw噪声: 使用 `createDerivedNoiseRNG(0xB37C4A93 ^ submap_id)` 的局部 RNG 执行 `std::normal_distribution<>{0, 0.1}(gen)`
 ├── 构建噪声变换矩阵: AngleAxisd(yaw_noise, Vector3d::UnitZ())
 ├── 应用噪声变换到点云: pcl::transformPointCloud()
 └── 更新子地图位姿: submap.submap_tf_ = noisy_transform
@@ -293,7 +308,7 @@ if (add_gaussian_noise) {
 输入: vector<EdgeSE3*> drEdges_ (DR边集合)
 ├── 对每条DR边的测量值 drMeas_[i]:
 ├── 提取原始位姿变换: meas_i.translation(), meas_i.linear()
-├── 生成yaw噪声: std::normal_distribution<>{0, 0.01}(getGlobalNoiseRNG())
+├── 生成yaw噪声: 使用 `createDerivedNoiseRNG(0xE5D941F3)` 的局部 RNG 执行 `std::normal_distribution<>{0, 0.01}(gen)`
 ├── 构建噪声变换: AngleAxisd(yaw_noise, Vector3d::UnitZ())
 ├── 应用噪声: rot = gtQuat * noise_rot, trans = gtTrans + noise_trans
 └── 更新边测量值: drMeas_[i] = noisy_measurement
@@ -319,13 +334,15 @@ if (add_gaussian_noise) {
 // 全局种子控制两个阶段的示例
 setNoiseRandomSeed(42);  // 设置种子42
 
-// 第一阶段使用
-std::mt19937& gen1 = getGlobalNoiseRNG();  // 从种子42的序列中取值
-double yaw_noise_1 = std::normal_distribution<>{0, 0.1}(gen1);
+// 第一阶段使用：派生出“子图流”
+constexpr std::uint64_t kSubmapStreamSalt = 0xB37C4A93ULL;
+auto gen_submap = createDerivedNoiseRNG(kSubmapStreamSalt ^ current_submap_id);
+double yaw_noise_1 = std::normal_distribution<>{0, 0.1}(gen_submap);
 
-// 第二阶段使用  
-std::mt19937& gen2 = getGlobalNoiseRNG();  // 继续从相同序列中取值
-double yaw_noise_2 = std::normal_distribution<>{0, 0.01}(gen2);
+// 第二阶段使用：派生出“图边流”  
+constexpr std::uint64_t kGraphStreamSalt = 0xE5D941F3ULL;
+auto gen_graph = createDerivedNoiseRNG(kGraphStreamSalt);
+double yaw_noise_2 = std::normal_distribution<>{0, 0.01}(gen_graph);
 
 // 结果: 相同种子 → 完全可复现的噪声序列
 ```
@@ -411,7 +428,8 @@ noise_seed: 1847206849  # 使用之前运行时显示的种子值
 
 ```cpp
 // 位置: utils_g2o.cpp addNoiseToSubmap() 函数
-std::mt19937& gen = getGlobalNoiseRNG();        // 全局种子控制的随机数生成器
+constexpr std::uint64_t kSubmapStreamSalt = 0xB37C4A93ULL;
+auto gen = createDerivedNoiseRNG(kSubmapStreamSalt ^ static_cast<std::uint64_t>(submap.submap_id_)); // 子图独立随机流
 std::normal_distribution<> d{0, 0.1};           // yaw噪声: 均值0，标准差0.1弧度(5.73°)
 
 // 噪声应用
@@ -425,8 +443,9 @@ Matrix3d m = AngleAxisd(roll, Vector3d::UnitX()) *
 
 ```cpp
 // 位置: graph_construction.cpp addNoiseToGraph() 函数
-std::mt19937& gen = getGlobalNoiseRNG();        // 相同的全局随机数生成器
-std::normal_distribution<> d{0, 0.01};          // yaw噪声: 均值0，标准差0.01弧度
+constexpr std::uint64_t kGraphStreamSalt = 0xE5D941F3ULL;
+auto gen = createDerivedNoiseRNG(kGraphStreamSalt);        // 图边独立随机流
+std::normal_distribution<> d{0, 0.01};                     // yaw噪声: 均值0，标准差0.01弧度
 
 // 噪声应用
 double roll = 0.0, pitch = 0.0, yaw = d(gen);  // 只有yaw有噪声
@@ -463,7 +482,7 @@ std::vector<double> noiseRotation = {0.0001, 0.0001, 0.001}; // 旋转噪声参�
 | **roll噪声** | 0.0 | 0.0 | 被禁用 |
 | **pitch噪声** | 0.0 | 0.0 | 被禁用 |  
 | **平移噪声** | 0.0 | 0.0 | 被禁用 |
-| **随机数源** | getGlobalNoiseRNG() | getGlobalNoiseRNG() | 相同的种子控制 |
+| **随机数源** | createDerivedNoiseRNG(0xB37C4A93 ^ submap_id) | createDerivedNoiseRNG(0xE5D941F3) | 同一 `noise_seed` 派生的独立流 |
 
 **关键说明**: 
 - 虽然 `generateGaussianNoise()` 配置了完整的6DOF噪声采样器，但实际的噪声生成在两个阶段函数中独立进行
@@ -504,8 +523,9 @@ std::vector<double> noiseRotation = {0.0001, 0.0001, 0.001}; // 旋转噪声参�
 
 1. **调整第一阶段yaw噪声强度**:
 ```cpp
-// 修改第122-123行
-std::mt19937& gen = getGlobalNoiseRNG();
+// 修改第154-157行
+constexpr std::uint64_t kSubmapStreamSalt = 0xB37C4A93ULL;
+auto gen = createDerivedNoiseRNG(kSubmapStreamSalt ^ static_cast<std::uint64_t>(submap.submap_id_));
 std::normal_distribution<> d{0, 0.2};  // 将标准差从0.1改为0.2（更强噪声）
 ```
 
@@ -520,8 +540,9 @@ Eigen::Vector3d trans = transSampler.generateSample();  // 取消注释
 
 1. **调整第二阶段yaw噪声强度**:
 ```cpp
-// 修改第202-203行
-std::mt19937& gen = getGlobalNoiseRNG();
+// 修改第202-205行
+constexpr std::uint64_t kGraphStreamSalt = 0xE5D941F3ULL;
+auto gen = createDerivedNoiseRNG(kGraphStreamSalt);
 std::normal_distribution<> d{0, 0.02};  // 将标准差从0.01改为0.02（更强噪声）
 ```
 

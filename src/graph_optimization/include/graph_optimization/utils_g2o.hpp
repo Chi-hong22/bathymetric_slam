@@ -14,6 +14,8 @@
 
 #include <fstream>
 #include <iostream>
+#include <random>
+#include <cstdint>
 
 #include "g2o/stuff/sampler.h"
 
@@ -35,6 +37,8 @@ void setNoiseRandomSeed(int seed);
 bool isNoiseSeedSet();
 std::mt19937& getGlobalNoiseRNG();
 int getCurrentNoiseSeed();  // 获取当前使用的噪声种子
+// 基于全局噪声种子派生独立随机流，避免不同阶段互相影响
+std::mt19937 createDerivedNoiseRNG(std::uint64_t stream_key);
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
 typedef pcl::PointXYZ PointT;

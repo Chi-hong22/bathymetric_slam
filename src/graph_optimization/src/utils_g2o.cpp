@@ -20,6 +20,16 @@ namespace {
     // 使用 std::unique_ptr 来管理全局随机数生成器的生命周期
     // 确保在程序退出时能正确释放资源
     std::unique_ptr<std::mt19937> global_rng_;
+    // SplitMix64 常量，用于快速、可复现地打乱种子
+    constexpr std::uint64_t kSplitMixPhi = 0x9E3779B97F4A7C15ULL;
+
+    // SplitMix64 伪随机生成器：将输入 seed 打散，确保不同 stream_key 不会相关
+    std::uint64_t splitmix64(std::uint64_t x) {
+        x += kSplitMixPhi;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+        return x ^ (x >> 31);
+    }
 }
 
 //--- 全局随机数引擎实现 ---//
@@ -52,6 +62,18 @@ int getCurrentNoiseSeed() {
     return current_seed_;
 }
 //--- 结束 ---//
+
+// 依据全局种子和不同 stream_key 组合出互不干扰的随机引擎
+std::mt19937 createDerivedNoiseRNG(std::uint64_t stream_key) {
+    // 通过 SplitMix64 将 base seed 与流标识混合，得到确定性子种子
+    std::uint64_t base_seed = static_cast<std::uint64_t>(getCurrentNoiseSeed());
+    std::uint64_t mixed = splitmix64(base_seed ^ stream_key);
+    std::seed_seq seq{
+        static_cast<std::uint32_t>(mixed),
+        static_cast<std::uint32_t>(mixed >> 32)
+    };
+    return std::mt19937(seq);
+}
 
 
 using namespace std;
@@ -133,7 +155,9 @@ void addNoiseToSubmap(GaussianGen& transSampler,
     }
 
     // 当前代码中未启用平移噪声，而是引入了一个偏置在 yaw 方向的微小旋转噪声
-    std::mt19937& gen = getGlobalNoiseRNG();
+    // 针对子图扰动固定盐值 + submap_id，确保同一子图每次获取相同随机流
+    constexpr std::uint64_t kSubmapStreamSalt = 0xB37C4A93ULL;
+    auto gen = createDerivedNoiseRNG(kSubmapStreamSalt ^ static_cast<std::uint64_t>(submap.submap_id_));
     std::normal_distribution<> d{0,0.05}; // yaw噪声 原参数0.1弧度(5.73°)
 
     // 构造 yaw 方向的小角度旋转作为扰动
@@ -184,6 +208,10 @@ void addNoiseToMap(GaussianGen& transSampler,
         std::cout << submap_set.at(i-1).submap_tf_.matrix() << std::endl;
     }
 
+    // 为整图级未使用接口保留独立盐值，避免未来使用时与其他流冲突
+    constexpr std::uint64_t kMapStreamSalt = 0xC74F1B21ULL;
+    auto gen = createDerivedNoiseRNG(kMapStreamSalt);
+
     // 遍历所有子地图，从第二个开始，为其添加噪声
     for (size_t i =1; i < submap_set.size(); i++){
         // 获取前一个子地图的位姿
@@ -195,7 +223,6 @@ void addNoiseToMap(GaussianGen& transSampler,
         Eigen::Vector3f gtTrans = meas_i.translation();
 
         // 初始化随机数生成器和正态分布（标准差为0.5）
-        std::mt19937& gen = getGlobalNoiseRNG();
         std::normal_distribution<> d{0,0.5};
 
         // 仅在偏航角（yaw）方向添加噪声，roll 和 pitch 保持为 0

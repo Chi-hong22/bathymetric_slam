@@ -10,7 +10,7 @@ downsampling_leaf_z: .05 # .1  .25
 # 海底 SLAM 参数
 submap_size: 100  # 每个子地图的 ping 数  原始数据：500
 add_gaussian_noise: true  # 是否在模拟数据中添加高斯噪声
-noise_seed: 10  # 可选的随机噪声种子, 注释掉或留空则为完全随机
+noise_seed: 40  # 可选的随机噪声种子, 注释掉或留空则为完全随机
 # sim_data/250826_sub_maps/NESP_noINS_shortTest：seed 40  20
 
 # 子地图重叠放缩系数。参数越小，则对子地图的重叠区域要求越严格。
