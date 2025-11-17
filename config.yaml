@@ -10,7 +10,7 @@ downsampling_leaf_z: .05 # .1  .25
 # 海底 SLAM 参数
 submap_size: 100  # 每个子地图的 ping 数  原始数据：500
 add_gaussian_noise: true  # 是否在模拟数据中添加高斯噪声
-noise_seed: 10  # 可选的随机噪声种子, 注释掉或留空则为完全随机
+noise_seed: 20  # 可选的随机噪声种子, 注释掉或留空则为完全随机
 # sim_data/250826_sub_maps/NESP_noINS_shortTest：seed 40  20
 
 # 子地图重叠放缩系数。参数越小，则对子地图的重叠区域要求越严格。
@@ -22,7 +22,7 @@ overlap_coverage: 0.6 # 按此系数减少寻找重叠的子地图区域 原始�
 # 250911 Comb 0.5
 
 # GICP 配准参数（单位：米）
-gicp_max_correspondence_distance: 0.1    # 对应点对的最大距离阈值，超过此距离的点对将被忽略 原始数据：20
+gicp_max_correspondence_distance: 0.1    # 对应点对的最大距离阈值，超过此距离的点对将被忽略 原始数据：20 0.1
 gicp_maximum_iterations: 200            # GICP 算法的最大迭代次数 原始数据：200
 gicp_transform_epsilon: 1e-3            # 两次迭代间变换矩阵差异的收敛阈值 1e-3
 gicp_euclidean_fitness_epsilon: 1e-3    # 配准误差收敛阈值，当误差小于此值时停止迭代 1e-3
@@ -44,8 +44,8 @@ gicp_info_diag: [100.0, 100.0, 10.0, 10.0]  # 信息矩阵参数说明 原始数
 
 # DR 权重 - 车辆在子地图间导航的不确定性
 # 值越大，表示越不信任里程计，优化时会更倾向于采纳闭环边的修正。
-dr_noise_x: 5.
-dr_noise_y: 5.
+dr_noise_x: 5.  # 5.
+dr_noise_y: 5.  # 5.
 dr_noise_z: 0.0001      # 0.1
 dr_noise_roll: 1e-4
 dr_noise_pitch: 1e-4
