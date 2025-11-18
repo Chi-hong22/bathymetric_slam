@@ -154,14 +154,14 @@ void BuildOptimizationProblem(const VectorOfConstraints& constraints,
 }
 
 // 返回优化求解是否成功，返回迭代次数
-int SolveOptimizationProblem(::ceres::Problem* problem) {
+int SolveOptimizationProblem(::ceres::Problem* problem, int max_iterations) {
     // 检查输入问题指针不为空
     CHECK(problem != NULL);
 
     // 创建Ceres求解器配置选项
     ::ceres::Solver::Options options;
     // 设置最大迭代次数为300
-    options.max_num_iterations = 100; // 最大迭代次数 原始数据:300
+    options.max_num_iterations = max_iterations; // 最大迭代次数
     // 选择线性求解器
     options.linear_solver_type = ::ceres::SPARSE_NORMAL_CHOLESKY;  // 稀疏正规方程，适用于大规模稀疏问题
     // options.linear_solver_type = ::ceres::DENSE_NORMAL_CHOLESKY; // 稠密正规方程
@@ -226,7 +226,8 @@ bool OutputPoses(const std::string& filename, const MapOfPoses& poses) {
  * 并将优化后的位姿保存到指定的文件中。在优化过程中，会根据提供的直接旋转约束数量来构建优化问题，
  * 并进行迭代优化直到满足收敛条件。
  */
-MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
+MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints,
+                       int max_iterations, bool export_debug_files){
     // 初始化 Ceres solver
     ::ceres::optimizer::MapOfPoses poses;
     ::ceres::optimizer::VectorOfConstraints constraints;
@@ -236,10 +237,11 @@ MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
         << "Error reading the file: " << outFilename;
 
     // 输出初始位姿到文件
-    CHECK(::ceres::optimizer::OutputPoses("poses_corrupted.txt", poses))
-        << "Error outputting to poses_corrupted.txt";
-
-    std::cout << "Original poses output" << std::endl;
+    if (export_debug_files) {
+        CHECK(::ceres::optimizer::OutputPoses("poses_corrupted.txt", poses))
+            << "Error outputting to poses_corrupted.txt";
+        std::cout << "Original poses output" << std::endl;
+    }
 
     // 构建Ceres优化问题
     ::ceres::Problem problem;
@@ -248,12 +250,14 @@ MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints){
     std::cout << "Ceres problem built" << std::endl;
 
     // 求解优化问题并进行迭代
-    int iterations = ::ceres::optimizer::SolveOptimizationProblem(&problem);
+    int iterations = ::ceres::optimizer::SolveOptimizationProblem(&problem, max_iterations);
 //        << "The solve was not successful, exiting.";
 
     // 输出优化后的位姿到文件
-    CHECK(::ceres::optimizer::OutputPoses("poses_optimized.txt", poses))
-        << "Error outputting to poses_optimized.txt";
+    if (export_debug_files) {
+        CHECK(::ceres::optimizer::OutputPoses("poses_optimized.txt", poses))
+            << "Error outputting to poses_optimized.txt";
+    }
 
     // 返回优化后的位姿
     return poses;

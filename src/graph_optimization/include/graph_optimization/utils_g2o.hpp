@@ -28,8 +28,6 @@
 //#include "graph_optimization/graph_construction.hpp"
 
 using namespace std;
-using namespace g2o;
-
 // 全局随机数引擎接口
 void setNoiseRandomSeed(int seed);
 bool isNoiseSeedSet();

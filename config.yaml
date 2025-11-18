@@ -57,3 +57,10 @@ dr_noise_yaw: 1e-2  # 1e-2
 # 2 = 来自GICP的协方差
 # 3 = 从外部文件加载的协方差
 lc_edge_covs_type: 2
+
+# 在线增量优化配置
+online_opt_enable: true        # 是否启用在线增量优化
+online_opt_freq: 1              # 每加入多少个子地图触发一次优化
+online_opt_max_iter: 30         # 每次增量优化的最大迭代次数
+online_log_path: build          # 在线日志与误差输出目录
+online_plot_input: build/ping_error.csv   # 绘图脚本读取的误差CSV路径

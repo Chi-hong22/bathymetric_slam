@@ -106,9 +106,6 @@ void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::s
     // 将图保存为g2o文件格式,以便可以用G2O工具进行优化
     graph_obj.saveG2OFile(outFilename);
 
-    // 初始化Google日志系统
-    google::InitGoogleLogging(argv0);
-
     // 使用Ceres求解器优化图结构
     // poses存储优化后的位姿结果
     // graph_obj.drEdges_.size()表示Dead Reckoning边的数量
@@ -185,6 +182,19 @@ int main(int argc, char** argv){
     YAML::Node config = YAML::LoadFile(config_path);
     std::cout << "已加载 Config file: " << config_path << std::endl;
     DRNoise dr_noise = loadDRNoiseFromFile(config);
+
+    // 将在线参数写入 config，以便后续模块访问
+    const bool online_opt_enable = config["online_opt_enable"] ? config["online_opt_enable"].as<bool>() : false;
+    const int online_opt_freq = config["online_opt_freq"] ? config["online_opt_freq"].as<int>() : 1;
+    const int online_opt_max_iter = config["online_opt_max_iter"] ? config["online_opt_max_iter"].as<int>() : 50;
+    const std::string online_log_path = config["online_log_path"] ? config["online_log_path"].as<std::string>() : "build";
+    const std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
+
+    config["online_opt_enable"] = online_opt_enable;
+    config["online_opt_freq"] = online_opt_freq;
+    config["online_opt_max_iter"] = online_opt_max_iter;
+    config["online_log_path"] = online_log_path;
+    config["online_plot_input"] = online_plot_input;
 
     // 设置高斯噪声的随机种子
     if (config["noise_seed"]) {

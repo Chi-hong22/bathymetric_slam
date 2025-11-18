@@ -7,6 +7,8 @@ import os
 from datetime import datetime
 from optparse import OptionParser
 
+# NOTE: 本脚本仅适用于离线 SLAM 全流程完成后的轨迹对比。
+
 parser = OptionParser()
 parser.add_option("--initial_poses",
                   dest="initial_poses",

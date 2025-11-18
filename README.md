@@ -95,6 +95,20 @@ You can find a real survey carried out with an ROV [here](https://strands.pdc.kt
 ./bathy_slam_real --simulation no --bathy_survey /path/to/datasets/mbes_pings.cereal --config config.yaml
 ```
 
+### 在线增量版本参数
+
+在线 SLAM 的相关设置全部放在 `config.yaml` 中，通过下表中的字段控制：
+
+| 配置项 | 说明 |
+| --- | --- |
+| `online_opt_enable` | 是否启用在线增量优化（默认 `false`） |
+| `online_opt_freq` | 每加入多少个子地图触发一次优化与误差输出（默认 `1`） |
+| `online_opt_max_iter` | 每次 Ceres 优化的最大迭代次数（默认 `30`） |
+| `online_log_path` | 在线日志与误差 CSV 输出目录（默认 `build`） |
+| `online_plot_input` | 绘图脚本读取的误差 CSV 路径（默认 `build/ping_error.csv`） |
+
+根据需要修改配置后，运行 `bathy_slam_real` 即可进入在线模式；随后使用 `scripts/plot_online_error.py --ping_error_csv build/ping_error.csv --ping_dt <ping周期秒>` 绘制 `time vs error_xy` 与 `time vs error_yaw` 曲线，并叠加纯 DR 轨迹对照。
+
 ### Generating your own cereal files from real surveys
 
 Take a look at the [AUVLIB](https://github.com/nilsbore/auvlib) toolbox in order to parse real MBES, SSS, navigation, etc data from the most common formats into .cereal files.

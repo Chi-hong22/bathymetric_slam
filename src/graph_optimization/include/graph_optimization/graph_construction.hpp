@@ -28,7 +28,6 @@
 
 using namespace std;
 using namespace Eigen;
-using namespace g2o;
 
 typedef std::vector<Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d> > tf_vec;
 
@@ -38,9 +37,9 @@ private:
 
 public:
 
-    vector<VertexSE3*> vertices_;
-    vector<EdgeSE3*> drEdges_;
-    vector<EdgeSE3*> lcEdges_;
+    vector<g2o::VertexSE3*> vertices_;
+    vector<g2o::EdgeSE3*> drEdges_;
+    vector<g2o::EdgeSE3*> lcEdges_;
     std::vector<Eigen::Matrix2d, Eigen::aligned_allocator<Eigen::Matrix2d> > covs_lc_;
     tf_vec drMeas_;
     tf_vec lcMeas_;

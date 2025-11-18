@@ -1,96 +1,87 @@
 ## 在线定位误差评估与增量优化实施方案
 
-### 1. 背景与目标
-- 现有 `test_slam_real` 流程完全离线：构图→一次 Ceres→输出轨迹。导师要求“每次节点注入即优化，并输出以 ping 时间为横轴的定位误差曲线”。
-- 输入数据固定：只有子地图关键帧姿态、点云与其覆盖的 ping（局部坐标）。缺失单 ping 真值/里程信息，因此 **真实的 per-ping 误差无法直接计算**，只能在关键帧层面近似。
-- 目标：基于现有数据，模拟在线 SLAM 行为，生成“在线估计 vs 真值”的时间序列，并提供绘图接口。
+> 本文档用于帮助协作者快速理解“在线增量 SLAM + 时间误差评估”特性，包括设计目标、数据限制、核心模块、配置入口以及如何调试。按照本文档即可在不阅读全部代码的情况下进行定制或调优。
 
-### 2. 数据限制与必要假设
-1. **误差聚焦在关键帧**：噪声注入与优化均作用于 `SubmapObj::submap_tf_`，所有 ping 共享同一姿态偏差。
-2. **缺乏真实时间戳**：以 ping 序号 / 子地图内索引代替时间。
-3. **per-ping 误差构造方式**：将关键帧误差按子地图覆盖的 ping 区间均分或线性插值，形成连续误差曲线。后续如获得原始导航轨迹再替换。
+---
 
-### 3. 整体实现流程
-1. **扩充在线日志**
-   - 现有输入是提前切好的 PCD 子地图，没有真实“在线生成过程”；因此将 `submap_id` 直接视为“伪时间”序列（等价于在线 SLAM 中的节点编号）。
-   - 在 `BathySlam::runOffline()` 的主循环中，新增 `OnlineLogEntry`（包含 `submap_id, pseudo_time_idx, est_pose, gt_pose`，可选记录子地图点数以决定伪时间步长）。
-   - 每次完成 GICP/闭环处理后，立即记录当前估计，与 `submaps_gt` 中同 ID 的真值对比。
+### 1. 背景
+- **遗留流程**：`test_slam_real` 原为离线批处理：构图 → 添加噪声 → 保存 g2o → 一次性 Ceres → 输出轨迹。
+- **新增需求**：
+  1. 需要模拟“在线”行为：每加入一个子地图就进行一次后端优化（或按固定频率）。
+  2. 需要输出以时间为横轴的定位误差曲线（含纯惯导 vs 在线估计）。
+  3. 所有配置必须集中在 `config.yaml`，避免复杂命令行。
 
-2. **每次节点注入后的后端优化**
-   - 触发频率由统一参数控制，默认 `frequency = 1`（每加入 1 个新节点就优化一次）。误差计算与该频率绑定：只有执行了后端优化，才会输出对应时间段的误差。
-   - 在添加完第 `i` 个子地图及其相关边后调用 `triggerIncrementalOptimization(i)`：
-     1. 使用当前 `GraphConstructor` 内容写 `graph_partial.g2o`。
-     2. 调用 Ceres（迭代次数由参数控制，例如 `max_online_iterations`）获取前 `i` 个节点的最新估计。
-     3. 用 `updateSubmapsCeres` 更新 `submaps_reg[0..i]`，并同步记录到在线日志。
-   - 添加配置项控制触发频率（如 `incremental_optimize=true`, `min_nodes_before_opt=5`），避免早期图过小或计算负担过重。
+### 2. 数据限制与假设
+- 输入仍为离线生成的 PCD 子地图集合，缺少真实 ping 时间与里程计序列。
+- 每个子地图只有一个关键帧姿态，对应一段 ping 序列；我们将 `submap_id` 视作“伪时间”节点。
+- per-ping 误差只能通过“将关键帧误差在该子地图内均分/插值”近似得到。
 
-3. **生成“伪 ping”误差序列**
-   - 没有真实 ping ID，只能把每个子地图视为“上一关键帧至当前关键帧”的时间区间；伪时间长度由“子地图包含的 ping 数 × 固定采样周期 Δt”决定。Δt 作为绘图脚本的输入参数，由用户在运行脚本时设置。
-   - 对每条日志记录，已知关键帧误差 `Δpose_i = est_pose_i - gt_pose_i`。
-   - 误差构造策略：
-     - **均匀分配**：该区间内所有伪时间点（即等间隔的 ping）获得相同误差。
-     - **线性插值**：误差在区间内由 0 平滑增加到 `Δpose_i`，更贴近“逐步漂移”。
-   - 输出 `ping_error.csv`：`time_s, err_xy, err_yaw, source_submap_id`（其中 `time_s = ping_idx * Δt`）；脚本也可保留 `pseudo_idx` 供调试。
+### 3. 关键配置
+在 `config.yaml` 中新增以下字段（均有默认值）：
+| 参数 | 作用 |
+| --- | --- |
+| `online_opt_enable` | 是否启用在线增量优化与误差日志 |
+| `online_opt_freq` | 每加入多少个子地图触发一次增量 Ceres |
+| `online_opt_max_iter` | 增量 Ceres 每次允许的最大迭代数 |
+| `online_log_path` | 在线日志、临时 g2o、`ping_error.csv` 的输出目录 |
+| `online_plot_input` | 绘图脚本默认读取的 CSV 路径 |
+
+VSCode 调试配置只需指定 `--simulation / --bathy_survey / --config`，无需再塞入在线参数。
+
+### 4. 修改概览
+1. **BathySlam::runOffline**
+   - 引入 `OnlineLogEntry` 缓存：记录 `submap_id`、伪时间索引、估计位姿、真值位姿、DR 位姿、子地图包含的 ping 数。
+   - 在处理每个子地图时，如果 `online_opt_enable=true` 且已存在边，调用 `tryRunOnlineOptimization()`。
+   - 当还没有任何 DR/LC 边（例如子图 0），直接跳过在线优化，避免空图保存/重复初始化 glog。
+   - 结束后调用 `online_logger.writeRawLog()` 和 `writePingErrorCsv()` 生成 `online_log.csv` 与 `ping_error.csv`。
+
+2. **GraphConstructor / ceres_optimizer**
+   - `GraphConstructor::saveG2OFile()` 已能处理空边；`tryRunOnlineOptimization()` 在调用前再判断一次是否为空。
+   - `ceres_optimizer::ceresSolver()` 支持自定义最大迭代数、可选是否导出 poses_corrupted/poses_optimized（在线模式禁用，离线保留）。
+
+3. **OnlineLogWriter（新组件）**
+   - 负责缓存在线日志，并输出：
+     - `online_log.csv`: 便于调试。
+     - `ping_error.csv`: 字段为 `ping_index, err_xy, err_yaw, err_xy_dr, err_yaw_dr, source_submap_id`。
+   - 误差计算：`err_xy` 为 XY 平面欧式距离，`err_yaw` 为 yaw 角差，DR 同理。若子地图包含 `N` 个 ping，则将误差线性展开到 `N` 个采样点。
 
 4. **绘图脚本**
-   - 新增 `scripts/plot_ping_error.py`（或扩展现有 `plot_results.py`），输入 `ping_error.csv`，绘制 `time vs error_xy`、`time vs error_yaw`。
-   - 可选叠加关键帧误差阶梯线，用于说明误差分摊的近似关系。
+   - 新增 `scripts/plot_online_error.py`，读取 `ping_error.csv`、结合 `--ping_dt` 生成时间轴（秒），绘制在线估计与纯 DR 的 `time vs error_xy`、`time vs error_yaw`。
+   - `scripts/plot_results.py` 增加说明：仅适用于离线流程的轨迹对比。
 
-3. **生成“伪 ping”误差序列**
-   - 对每条日志记录，沿伪时间区间展开关键帧误差 `Δpose_i = est_pose_i - gt_pose_i`。
-   - 误差构造策略：
-     - **均匀分配**：区间内所有伪时间点赋同样误差。
-     - **线性插值**：误差在区间内由 0 平滑增加到 `Δpose_i`。
-   - 额外输出 **纯惯导（DR）误差**：使用 `gaussian_noise_guide.md` 中的“真值 + yaw 噪声”生成的 DR 链（`graph_obj.drChain_` / `drMeas_`）与真值比较，并按相同步长展开，作为绘图对照。
-   - 输出 `ping_error.csv`：`time_s, err_xy, err_yaw, source_submap_id, err_xy_dr, err_yaw_dr`（脚本内部再根据 Δt 生成时间轴）。
+5. **README / 其他**
+   - README 的“在线增量版本”章节说明配置项与绘图流程。
+   - `.vscode/launch.json` 提供新的 Python debug 配置以运行 `plot_online_error.py`。
 
-4. **绘图脚本**
-   - 新增 `scripts/plot_online_error.py`（命名可调整），读取 `ping_error.csv`，分别输出两张图：`time vs error_xy`、`time vs error_yaw`。
-   - 每张图叠加两条曲线：`online_estimate` 与 `pure_DR`。
-   - 输出目录、 DPI、是否保存等参数与 `plot_results.py` 保持一致；图片命名遵循 `plot_results.py` 的模式。
-   - 原有 `scripts/plot_results.py` 在文件头部添加注释：**“仅适用于完整离线 SLAM 流程结束后的 pose 对比”**，避免混淆。
+### 5. 在线优化流程详解
+1. **触发时机**：每当 `online_opt_enable=true` 且 `(submaps_reg.size() % online_opt_freq == 0)`，并且图中已有至少一条边。
+2. **流程**：
+   - `GraphConstructor::saveG2OFile("build/graph_online_tmp.g2o")`
+   - `ceres_solver("--graph_online_tmp.g2o", dr_edge_count, online_opt_max_iter, export_debug=false)`
+   - `updateSubmapsCeres(poses, submaps_reg)`
+3. **glog 初始化**：统一在 `main()` 中调用一次 `google::InitGoogleLogging(argv[0]);`，在线/离线都复用，避免 “Init twice” 崩溃。
 
-### 4. 模块改动点
-| 模块 | 变更 | 目的 |
-| ---- | ---- | ---- |
-| `BathySlam::runOffline` | 插入在线日志记录、统计 ping 区间 | 支持时间序列输出 |
-| `GraphConstructor` & `ceres_optimizer` | 提供“部分图”保存与快速求解接口；配置迭代上限 | 支持每步增量优化 |
-| `SubmapsVec` 数据结构 | 记录伪时间长度（例如点数或固定步数） | 为误差分摊提供依据 |
-| 新增 `OnlineLogWriter` | 统一管理 CSV/JSON 输出，避免主流程杂乱 | 后续分析 |
-| 新增 `plot_online_error.py` | 生成 `time vs error_xy`、`time vs error_yaw` 并叠加 DR 曲线 | 展示结果 |
-| 更新 `plot_results.py` 注释 | 标明适用范围（离线完成后使用） | 使用指引 |
+### 6. 误差生成逻辑
+1. `pseudo_time_idx`：累计“子地图包含的 ping 数”。
+2. `ping_index = pseudo_time_idx + k`（k 从 0 到 ping_count-1），绘图脚本乘以 `--ping_dt` 得时间。
+3. `err_xy` / `err_yaw`：在一个子地图内按线性比例递增（模拟误差随时间积累）。DR 误差采用 `dr_poses` 与真值比较。
 
-### 5. 里程碑与验证
-1. **阶段一：日志与增量优化**  
-   - 验证每次节点注入后 Ceres 能正常运行，`online_log.csv` 有逐节点估计。
-2. **阶段二：误差分摊与导出**  
-   - 检查 `ping_error.csv` 是否连续、值域合理（可随机抽取子地图人工计算对比）。
-3. **阶段三：绘图**  
-   - 运行脚本生成曲线，确认随节点增长误差趋势与实际表现一致。
+### 7. 输出文件
+| 文件 | 说明 |
+| --- | --- |
+| `build/online_log.csv` | 每个子地图的日志（伪时间、姿态等） |
+| `build/ping_error.csv` | 供绘图脚本使用的误差序列 |
+| `build/graph_online_tmp.g2o` | 在线 Ceres 的临时 g2o（每次触发时覆盖） |
 
-### 6. 参数暴露与 VS Code 启动配置
-- **未来工作**：在检测不到任何重叠、且仍处于梳妆路径第一条直线时，仅计算误差不触发优化。实现方式：在调用 `triggerIncrementalOptimization` 前检查 `submap_i.overlaps_idx_.empty()` 并结合 swath/航程条件，若满足则直接写日志。此逻辑作为后续扩展。
-- 新增 CLI 参数（示例，实际实现时需在 `cxxopts` 等解析器内添加，并在 `.vscode/launch.json` 中给出中文注释）：
-  - `--online_opt_enable`：是否启用增量优化与在线日志；
-  - `--online_opt_freq <int>`：触发频率/误差输出频率，默认 1；
-  - `--online_opt_max_iter <int>`：每次增量 Ceres 的最大迭代数；
-  - `--online_log_path <path>`：在线误差日志输出目录；
-  - `--online_plot_input <path>`：供绘图脚本读取的 CSV。
-- `launch.json` 里对应配置项需要附中文说明（例如“在线优化开关”“每次优化最大迭代数”），确保无需改代码即可调整。
-- Python 调试配置新增一条：运行 `scripts/plot_online_error.py`（参数包括 `--ping_error_csv`, `--ping_dt`（固定 ping 时间间隔，单位秒）, `--save_fig` 等）。`plot_results.py` 保留，但在脚本头部及 `launch.json` 中明确“仅适用于离线 SLAM 完成后的误差对比”。
+### 8. 调试建议
+1. 确认 `config.yaml` 中在线参数设置正确；若 `online_opt_enable=false`，运行行为等同原始版本。
+2. 调整 `online_opt_freq` 可降低增量优化频率。例如设置为 5 表示每 5 个子地图优化一次。
+3. `online_opt_max_iter` 过大可能导致在线阶段耗时；建议视数据情况在 10–50 之间调节。
+4. `--ping_dt` 需要由数据集提供（ping 间隔时间），默认脚本为 1 秒，可在调试配置中修改。
 
-### 7. 里程碑与验证
-1. **阶段一：日志与增量优化**  
-   - 验证每次节点注入后 Ceres 能正常运行，`online_log.csv` 有逐节点估计。
-2. **阶段二：误差分摊与导出**  
-   - 检查 `ping_error.csv` 是否连续、值域合理（可随机抽取子地图人工计算对比）。
-3. **阶段三：绘图**  
-   - 运行新脚本生成 `error_xy`、`error_yaw` 曲线，并确认 DR 对照曲线存在。
+### 9. 后续扩展
+- **前段首条直线的“只记录不优化”**：可在 `BathySlam::runOffline` 中检测 `submap_i.overlaps_idx_.empty()` + “仍处于首条直线路段”时仅日志不触发优化。
+- **真实 per-ping 轨迹**：若未来获取原始导航数据，可替换 `ping_error.csv` 的生成策略，以真实时间戳取代伪时间。
+- **更轻量的增量优化器**：若在线 Ceres 仍过重，可考虑集成 iSAM2 或 g2o incremental。
 
-### 8. 后续可扩展方向
-- 获取 AUV 原始导航/IMU 数据后，可替换当前“关键帧均分”策略，实现真实 per-ping 误差。
-- 引入更轻量的增量求解器（如 iSAM2）以减少每步优化耗时。
-- 将在线误差反馈回系统，用于动态阈值或自动重定位策略。
-
-> **注意**：本文方案以当前数据条件为前提，任何 per-ping 精度分析均应明确说明“误差在子地图内均匀分布/线性插值”的假设。后续若数据源增强，可在不改接口的情况下替换误差生成模块。
 

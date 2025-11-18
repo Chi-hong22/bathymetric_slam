@@ -11,11 +11,15 @@
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/shortTest_PCD_sub_maps/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/PCD_sub_maps/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/custom_sub_maps/noNESP/","--config","../config.yaml"],
-            // "args": ["--simulation","yes","--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS_shortTest/","--config","../config.yaml"],
+            "args": ["--simulation","yes","--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS_shortTest/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250826_sub_maps/NESP_noINS/","--config","../config.yaml"],
-            "args": ["--simulation","yes", "--bathy_survey","../sim_data/251111_sub_maps/NESP_noINS/","--config","../config.yaml"],
+            // "args": [
+            //     "--simulation","yes",
+            //     "--bathy_survey","../sim_data/251111_sub_maps/NESP_noINS/",
+            //     "--config","../config.yaml",
+            // ],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS/","--config","../config.yaml"],
-            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS_shortest/","--config","../config.yaml"],
+            // "args": ["--simulation","yes","--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250911_sub_maps/Comb_noINS/","--config","../config.yaml"],
 
             "stopAtEntry": false,
@@ -92,6 +96,24 @@
                 "--verbose",
                 "--prefix",
                 "optimized"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python：在线误差曲线",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/plot_online_error.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--ping_error_csv",
+                "build/ping_error.csv",
+                "--ping_dt",
+                "0.5",                      // ping 间隔时间（秒），按需调整
+                "--save_fig",
+                "build/",
+                "--dpi",
+                "600"
             ],
             "cwd": "${workspaceFolder}"
         }

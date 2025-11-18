@@ -16,6 +16,8 @@
 
 using namespace std;
 using pcl::visualization::PointCloudColorHandlerCustom;
+using g2o::EdgeSE3;
+using g2o::VertexSE3;
 
 SubmapsVisualizer::SubmapsVisualizer(pcl::visualization::PCLVisualizer &viewer):
                                     viewer_(viewer){

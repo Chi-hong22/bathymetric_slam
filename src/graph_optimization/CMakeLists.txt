@@ -11,6 +11,7 @@ add_library(utils_g2o
 
 add_library(graph_construction
     src/graph_construction.cpp
+    src/online_logger.cpp
 )
 
 add_library(read_g2o
