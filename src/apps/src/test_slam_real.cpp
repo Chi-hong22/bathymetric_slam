@@ -200,9 +200,7 @@ int main(int argc, char** argv){
     std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
 
     online_log_path = resolvePath(online_log_path);
-    boost::filesystem::path plot_path = boost::filesystem::path(online_plot_input);
-    boost::filesystem::path abs_plot = boost::filesystem::absolute(plot_path, boost::filesystem::path(online_log_path));
-    online_plot_input = abs_plot.lexically_normal().string();
+    online_plot_input = resolvePath(online_plot_input);
 
     config["online_opt_enable"] = online_opt_enable;
     config["online_opt_freq"] = online_opt_freq;
