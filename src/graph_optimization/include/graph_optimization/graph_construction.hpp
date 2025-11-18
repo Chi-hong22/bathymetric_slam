@@ -45,6 +45,7 @@ public:
     tf_vec lcMeas_;
     tf_vec drChain_;
     int edge_covs_type_;
+    bool dr_noise_applied_;
 
     GraphConstructor(std::vector<Eigen::Matrix2d, Eigen::aligned_allocator<Eigen::Matrix2d> > covs_lc);
 
@@ -64,6 +65,9 @@ public:
     void createDREdge(const SubmapObj& submap);
 
     void addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler);
+    void addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler);
+
+    bool isDRNoiseApplied() const { return dr_noise_applied_; }
 
 };
 

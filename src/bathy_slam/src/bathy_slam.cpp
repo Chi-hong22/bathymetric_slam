@@ -34,6 +34,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
     fileOutputStream.open("loop_closures.txt", std::ofstream::out);
 
     // 解析在线 SLAM 相关参数
+    const bool add_gaussian_noise = (config["add_gaussian_noise"]) ? config["add_gaussian_noise"].as<bool>() : false;
     const bool online_enabled = (config["online_opt_enable"]) ? config["online_opt_enable"].as<bool>() : false;
     const int online_opt_freq = (config["online_opt_freq"]) ? config["online_opt_freq"].as<int>() : 1;
     const int online_opt_max_iter = (config["online_opt_max_iter"]) ? config["online_opt_max_iter"].as<int>() : 50;
@@ -60,6 +61,11 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
         }
         online_logger = std::make_unique<graph_optimization::OnlineLogWriter>(online_log_path, online_plot_input);
     }
+    boost::filesystem::path log_dir(online_log_path);
+    if (online_enabled && !log_dir.empty()) {
+        boost::filesystem::create_directories(log_dir);
+    }
+
     auto tryRunOnlineOptimization = [&](SubmapsVec& registered_submaps) {
         if (!online_enabled || !online_logger) {
             return;
@@ -78,10 +84,6 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
         if (!glog_initialized) {
             google::InitGoogleLogging("online_opt");
             glog_initialized = true;
-        }
-        boost::filesystem::path log_dir(online_log_path);
-        if (!log_dir.empty()) {
-            boost::filesystem::create_directories(log_dir);
         }
         boost::filesystem::path graph_path = log_dir / "graph_online_tmp.g2o";
         graph_obj_->saveG2OFile(graph_path.string());
@@ -137,6 +139,9 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
         if(submap_i.submap_id_ != 0 ){
             std::cout << "推位边 DR from " << submap_i.submap_id_ -1 << " to " << submap_i.submap_id_<< std::endl;
             graph_obj_->createDREdge(submap_i);
+            if (add_gaussian_noise) {
+                graph_obj_->addNoiseToLastDREdge(transSampler, rotSampler);
+            }
             if (online_enabled && !dr_poses.empty() &&
                 submap_i.submap_id_ >= 0 &&
                 submap_i.submap_id_ < static_cast<int>(dr_poses.size())) {
@@ -161,7 +166,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
 
             // 构建目标子地图，合并与当前子图重叠的已注册子地图
             submap_trg = gicp_reg_->constructTrgSubmap(submaps_reg, submap_i.overlaps_idx_, dr_noise);
-            if (config["add_gaussian_noise"].as<bool>()) {
+            if (add_gaussian_noise) {
                 addNoiseToSubmap(transSampler, rotSampler, submap_i); // 向子地图添加误差扰动
             }
 
@@ -227,10 +232,6 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
     fileOutputStream.close();
 
     if (online_enabled && online_logger) {
-        boost::filesystem::path log_dir(online_log_path);
-        if (!log_dir.empty()) {
-            boost::filesystem::create_directories(log_dir);
-        }
         const std::string raw_log_file = (log_dir / "online_log.csv").string();
         online_logger->writeRawLog(raw_log_file);
         online_logger->writePingErrorCsv();

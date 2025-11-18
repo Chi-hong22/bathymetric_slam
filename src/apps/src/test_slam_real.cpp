@@ -90,7 +90,7 @@ SubmapsVec build_bathymetric_graph(GraphConstructor& graph_obj, SubmapsVec& subm
 // 创建初始图形估计，如果add_gaussian_noise=true，则可选择添加高斯噪声
 void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, GaussianGen& transSampler, GaussianGen& rotSampler, bool add_gaussian_noise) {
     std::cout << "是否添加高斯噪声 = " << add_gaussian_noise << std::endl;
-    if (add_gaussian_noise) {
+    if (add_gaussian_noise && !graph_obj.isDRNoiseApplied()) {
         // 向图中的边添加噪声
         int usedSeed = getCurrentNoiseSeed();
         std::cout << "正在使用种子 " << usedSeed << " 添加高斯噪声到图边..." << std::endl;
@@ -184,11 +184,25 @@ int main(int argc, char** argv){
     DRNoise dr_noise = loadDRNoiseFromFile(config);
 
     // 将在线参数写入 config，以便后续模块访问
+    boost::filesystem::path config_abs = boost::filesystem::absolute(config_path);
+    boost::filesystem::path config_dir = config_abs.parent_path();
+
+    auto resolvePath = [&](const std::string& path_str) {
+        boost::filesystem::path p(path_str);
+        boost::filesystem::path abs_p = boost::filesystem::absolute(p, config_dir);
+        return abs_p.lexically_normal().string();
+    };
+
     const bool online_opt_enable = config["online_opt_enable"] ? config["online_opt_enable"].as<bool>() : false;
     const int online_opt_freq = config["online_opt_freq"] ? config["online_opt_freq"].as<int>() : 1;
     const int online_opt_max_iter = config["online_opt_max_iter"] ? config["online_opt_max_iter"].as<int>() : 50;
-    const std::string online_log_path = config["online_log_path"] ? config["online_log_path"].as<std::string>() : "build";
-    const std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
+    std::string online_log_path = config["online_log_path"] ? config["online_log_path"].as<std::string>() : "build";
+    std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
+
+    online_log_path = resolvePath(online_log_path);
+    boost::filesystem::path plot_path = boost::filesystem::path(online_plot_input);
+    boost::filesystem::path abs_plot = boost::filesystem::absolute(plot_path, boost::filesystem::path(online_log_path));
+    online_plot_input = abs_plot.lexically_normal().string();
 
     config["online_opt_enable"] = online_opt_enable;
     config["online_opt_freq"] = online_opt_freq;

@@ -49,9 +49,9 @@ VSCode 调试配置只需指定 `--simulation / --bathy_survey / --config`，无
    - 新增 `scripts/plot_online_error.py`，读取 `ping_error.csv`、结合 `--ping_dt` 生成时间轴（秒），绘制在线估计与纯 DR 的 `time vs error_xy`、`time vs error_yaw`。
    - `scripts/plot_results.py` 增加说明：仅适用于离线流程的轨迹对比。
 
-5. **README / 其他**
-   - README 的“在线增量版本”章节说明配置项与绘图流程。
-   - `.vscode/launch.json` 提供新的 Python debug 配置以运行 `plot_online_error.py`。
+- README / 其他
+  - README 的“在线增量版本”章节说明配置项与绘图流程。
+  - `.vscode/launch.json` 提供新的 Python debug 配置以运行 `plot_online_error.py`。
 
 ### 5. 在线优化流程详解
 1. **触发时机**：每当 `online_opt_enable=true` 且 `(submaps_reg.size() % online_opt_freq == 0)`，并且图中已有至少一条边。
@@ -64,7 +64,7 @@ VSCode 调试配置只需指定 `--simulation / --bathy_survey / --config`，无
 ### 6. 误差生成逻辑
 1. `pseudo_time_idx`：累计“子地图包含的 ping 数”。
 2. `ping_index = pseudo_time_idx + k`（k 从 0 到 ping_count-1），绘图脚本乘以 `--ping_dt` 得时间。
-3. `err_xy` / `err_yaw`：在一个子地图内按线性比例递增（模拟误差随时间积累）。DR 误差采用 `dr_poses` 与真值比较。
+3. `err_xy` / `err_yaw`：在一个子地图内按线性比例递增（模拟误差随时间积累）。DR 误差来自在 `BathySlam::runOffline()` 里创建 DR 边后立即调用 `graph_obj_->addNoiseToLastDREdge()` 累积出的噪声链，因此能够真实反映“惯导发散”。
 
 ### 7. 输出文件
 | 文件 | 说明 |

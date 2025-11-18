@@ -17,7 +17,8 @@ using namespace std;
 using namespace g2o;
 
 GraphConstructor::GraphConstructor(std::vector<Eigen::Matrix2d, Eigen::aligned_allocator<Eigen::Matrix2d> > covs_lc):
-    covs_lc_(covs_lc){
+    covs_lc_(covs_lc),
+    dr_noise_applied_(false){
     edge_covs_type_ = 2;
 }
 
@@ -236,6 +237,48 @@ void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& r
       noisyMeasurement.translation() = trans;
       drMeas_.at(i) = noisyMeasurement;
     }
+    if (!drEdges_.empty()) {
+        dr_noise_applied_ = true;
+    }
+}
+
+void GraphConstructor::addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler){
+
+    if (drEdges_.empty()) {
+        return;
+    }
+    std::mt19937& gen = getGlobalNoiseRNG();
+    std::normal_distribution<> d{0,0.005};
+
+    const size_t idx = drMeas_.size() - 1;
+    Eigen::Isometry3d meas_i = drMeas_.at(idx);
+    Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)meas_i.linear();
+    Eigen::Vector3d gtTrans = meas_i.translation();
+
+    double roll = 0.0, pitch = 0.0, yaw = d(gen);
+    Matrix3d m;
+    m = AngleAxisd(roll, Vector3d::UnitX())
+        * AngleAxisd(pitch, Vector3d::UnitY())
+        * AngleAxisd(yaw, Vector3d::UnitZ());
+
+    Eigen::Vector3d quatXYZ = rotSampler.generateSample();
+    double qw = 1.0 - quatXYZ.norm();
+    if (qw < 0) {
+        qw = 0.;
+        cerr << "x";
+    }
+    Eigen::Quaterniond rot(m);
+
+    Eigen::Vector3d trans;
+    trans.setZero();
+
+    rot = gtQuat * rot;
+    trans = gtTrans + trans;
+
+    Eigen::Isometry3d noisyMeasurement = (Eigen::Isometry3d) rot;
+    noisyMeasurement.translation() = trans;
+    drMeas_.at(idx) = noisyMeasurement;
+    dr_noise_applied_ = true;
 }
 
 void GraphConstructor::saveG2OFile(std::string outFilename){

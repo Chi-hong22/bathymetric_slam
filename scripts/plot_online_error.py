@@ -74,33 +74,6 @@ def resolve_save_path(save_target: str, suffix: str) -> str:
     return os.path.join(directory, f"{base_name}_{suffix}_{timestamp}{ext}")
 
 
-def plot_metric(time_axis: np.ndarray,
-                online_values: np.ndarray,
-                dr_values: np.ndarray,
-                ylabel: str,
-                suffix: str,
-                args):
-    plt.figure()
-    plt.plot(time_axis, online_values, label="Online Estimate", color="#1f77b4", linewidth=1.5)
-    plt.plot(time_axis, dr_values, label="Pure DR", color="#d62728", linewidth=1.2, alpha=0.8)
-    plt.xlabel("Time (s)")
-    plt.ylabel(ylabel)
-    plt.title(f"{ylabel} vs Time")
-    plt.grid(True, alpha=0.3)
-    plt.legend(loc="best")
-    plt.tight_layout()
-
-    save_path = resolve_save_path(args.save_fig, suffix)
-    if save_path:
-        plt.savefig(save_path, dpi=args.dpi, bbox_inches="tight")
-        print(f"[plot_online_error] Saved figure to {save_path}")
-
-    if not args.no_show:
-        plt.show()
-    else:
-        plt.close()
-
-
 def main():
     args = parse_args()
     if args.dpi <= 0:
@@ -110,18 +83,33 @@ def main():
     data = load_ping_error(args.ping_error_csv)
     time_axis = data["ping_index"] * args.ping_dt
 
-    plot_metric(time_axis,
-                data["err_xy"],
-                data["err_xy_dr"],
-                "Position Error (m)",
-                "xy",
-                args)
-    plot_metric(time_axis,
-                data["err_yaw"],
-                data["err_yaw_dr"],
-                "Yaw Error (rad)",
-                "yaw",
-                args)
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(10, 8))
+    axes[0].plot(time_axis, data["err_xy"], label="Online Estimate", color="#1f77b4", linewidth=1.5)
+    axes[0].plot(time_axis, data["err_xy_dr"], label="Pure DR", color="#d62728", linewidth=1.2, alpha=0.8)
+    axes[0].set_ylabel("Position Error (m)")
+    axes[0].set_title("Position Error vs Time")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(loc="best")
+
+    axes[1].plot(time_axis, data["err_yaw"], label="Online Estimate", color="#1f77b4", linewidth=1.5)
+    axes[1].plot(time_axis, data["err_yaw_dr"], label="Pure DR", color="#d62728", linewidth=1.2, alpha=0.8)
+    axes[1].set_xlabel("Time (s)")
+    axes[1].set_ylabel("Yaw Error (rad)")
+    axes[1].set_title("Yaw Error vs Time")
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend(loc="best")
+
+    fig.tight_layout()
+
+    save_path = resolve_save_path(args.save_fig, "combined")
+    if save_path:
+        fig.savefig(save_path, dpi=args.dpi, bbox_inches="tight")
+        print(f"[plot_online_error] Saved figure to {save_path}")
+
+    if not args.no_show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 if __name__ == "__main__":
