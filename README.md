@@ -107,3 +107,48 @@ Take a look at the [AUVLIB](https://github.com/nilsbore/auvlib) toolbox in order
 - **[参数调优指南](docs/parameter_tuning_guide.md)**: 如何调整算法参数以适应不同的数据集和应用场景
 - **[轨迹结果绘图指南](docs/plot_results_guide.md)**: 如何可视化和分析SLAM轨迹结果
 - **[高斯噪声实现指南](docs/gaussian_noise_guide.md)**: 高斯噪声的实现原理、配置方法和可复现性功能详解
+
+## 分支管理
+
+### 仓库结构
+
+本仓库维护两个远程仓库链接：
+
+1. **origin**（主开发仓库）
+   - URL: `https://github.com/Chi-hong22/bathymetric_slam.git`
+   - 用途：Fork 后的主力开发仓库，所有开发分支推送至此
+   - 默认分支：`main`
+
+2. **upstream**（上游原始仓库）
+   - URL: `https://github.com/ignaciotb/bathymetric_slam.git`
+   - 用途：上游原始仓库，用于同步最新更新
+
+### 主要分支
+
+| 分支名称 | 跟踪远程 | 说明 |
+|---------|---------|------|
+| `main` | `origin/main` | **主力开发分支**，所有新功能开发基于此分支 |
+| `master` | `upstream/master` | 备份分支，跟踪上游原始仓库，保持与上游同步 |
+| `feature/NESP_online-rewrite` | `origin/feature/NESP_online-rewrite` | 在线重写功能开发分支 |
+| `feature/NESP_derived_rng_streams` | `origin/feature/NESP_derived_rng_streams` | 派生随机流机制优化分支 |
+
+### 分支使用建议
+
+- 日常开发请基于 `main` 分支创建新的功能分支
+- `master` 分支仅用于与上游仓库同步，不进行开发工作
+- 定期从 `upstream/master` 拉取更新到本地 `master`，然后根据需要合并到 `main`
+
+### 同步上游更新
+
+```bash
+# 获取上游更新
+git fetch upstream
+
+# 切换到 master 分支并同步
+git checkout master
+git merge upstream/master
+
+# 根据需要将更新合并到 main
+git checkout main
+git merge master
+```
