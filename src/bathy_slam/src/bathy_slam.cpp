@@ -19,10 +19,13 @@ BathySlam::~BathySlam(){
 
 // 运行离线的Bathyslam算法
 // submaps_gt: 地面真值子图
-// transSampler: 平移噪声的高斯采样器
-// rotSampler: 旋转噪声的高斯采样器
+// transSampler_DR, rotSampler_DR: DR边噪声的高斯采样器（用于图优化约束）
+// transSampler_SM, rotSampler_SM: 子地图噪声的高斯采样器（用于GICP配准前）
 // config: 配置参数
-SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config){
+SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, 
+                                 GaussianGen& transSampler_DR, GaussianGen& rotSampler_DR,
+                                 GaussianGen& transSampler_SM, GaussianGen& rotSampler_SM,
+                                 YAML::Node config){
     // 从文件中加载DR噪声参数
     DRNoise dr_noise = loadDRNoiseFromFile(config);
     // 初始化目标子图并应用DR噪声
@@ -142,8 +145,9 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
         if(submap_i.submap_id_ != 0 ){
             std::cout << "推位边 DR from " << submap_i.submap_id_ -1 << " to " << submap_i.submap_id_<< std::endl;
             graph_obj_->createDREdge(submap_i);
-            if (add_gaussian_noise) {
-                graph_obj_->addNoiseToLastDREdge(transSampler, rotSampler);
+            // 在线模式：逐边加噪（用于实时误差累积）；离线模式：保持批量加噪（保证随机数消耗顺序一致）
+            if (add_gaussian_noise && online_enabled) {
+                graph_obj_->addNoiseToLastDREdge(transSampler_DR, rotSampler_DR);
             }
             if (online_enabled && !dr_poses.empty() &&
                 submap_i.submap_id_ >= 0 &&
@@ -170,7 +174,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
             // 构建目标子地图，合并与当前子图重叠的已注册子地图
             submap_trg = gicp_reg_->constructTrgSubmap(submaps_reg, submap_i.overlaps_idx_, dr_noise);
             if (add_gaussian_noise) {
-                addNoiseToSubmap(transSampler, rotSampler, submap_i); // 向子地图添加误差扰动
+                addNoiseToSubmap(transSampler_SM, rotSampler_SM, submap_i); // 向子地图添加误差扰动（使用独立种子）
             }
 
             // Compute initial guess for GICP

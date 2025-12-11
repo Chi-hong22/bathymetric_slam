@@ -67,7 +67,9 @@ void benchmark_gt(SubmapsVec& submaps_gt, benchmark::track_error_benchmark& benc
 
 // 函数通过GICP子图配准和SLAM求解器，构建一个包含海洋深度图的SLAM图。
 SubmapsVec build_bathymetric_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_gt,
-                                   GaussianGen& transSampler, GaussianGen& rotSampler, YAML::Node config) {
+                                   GaussianGen& transSampler_DR, GaussianGen& rotSampler_DR,
+                                   GaussianGen& transSampler_SM, GaussianGen& rotSampler_SM,
+                                   YAML::Node config) {
 
     // GICP reg for submaps
     SubmapRegistration gicp_reg(config);
@@ -78,23 +80,27 @@ SubmapsVec build_bathymetric_graph(GraphConstructor& graph_obj, SubmapsVec& subm
 
     // 运行离线的Bathyslam算法
         // submaps_gt: 地面真值子图
-        // transSampler: 平移噪声的高斯采样器
-        // rotSampler: 旋转噪声的高斯采样器
+        // transSampler_DR, rotSampler_DR: DR边噪声生成器
+        // transSampler_SM, rotSampler_SM: 子地图噪声生成器
         // config: 配置参数
-    SubmapsVec submaps_reg = slam_solver.runOffline(submaps_gt, transSampler, rotSampler, config);
+    SubmapsVec submaps_reg = slam_solver.runOffline(submaps_gt, 
+                                                     transSampler_DR, rotSampler_DR,
+                                                     transSampler_SM, rotSampler_SM, 
+                                                     config);
     std::cout << "图构建完成，按空格键继续" << std::endl;
 
     return submaps_reg;
 }
 
 // 创建初始图形估计，如果add_gaussian_noise=true，则可选择添加高斯噪声
-void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, GaussianGen& transSampler, GaussianGen& rotSampler, bool add_gaussian_noise) {
+void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, 
+                                   GaussianGen& transSampler_DR, GaussianGen& rotSampler_DR, 
+                                   bool add_gaussian_noise) {
     std::cout << "是否添加高斯噪声 = " << add_gaussian_noise << std::endl;
     if (add_gaussian_noise && !graph_obj.isDRNoiseApplied()) {
-        // 向图中的边添加噪声
-        int usedSeed = getCurrentNoiseSeed();
-        std::cout << "正在使用种子 " << usedSeed << " 添加高斯噪声到图边..." << std::endl;
-        graph_obj.addNoiseToGraph(transSampler, rotSampler);
+        // 向图中的DR边添加噪声（离线模式批量加噪，保证随机序列一致性）
+        std::cout << "正在添加高斯噪声到所有DR边（离线批量模式）..." << std::endl;
+        graph_obj.addNoiseToGraph(transSampler_DR, rotSampler_DR);
         std::cout << "已成功向图添加高斯噪声" << std::endl;
     }
     // 创建初始DR链并可视化
@@ -109,9 +115,9 @@ void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::s
     // 使用Ceres求解器优化图结构
     // poses存储优化后的位姿结果
     // graph_obj.drEdges_.size()表示Dead Reckoning边的数量
-    // 离线模式显式保持旧版行为：300 次迭代、不导出 debug，保留可控的 Huber 开关
+    // 离线模式显式保持旧版行为：300 次迭代、导出 debug 文件，保留可控的 Huber 开关
     ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(
-        outFilename, graph_obj.drEdges_.size(), 300, false, use_huber_loss);
+        outFilename, graph_obj.drEdges_.size(), 300, true, use_huber_loss);
 
     // 使用优化后的位姿更新子地图
     ::ceres::optimizer::updateSubmapsCeres(poses, submaps_reg);
@@ -214,13 +220,19 @@ int main(int argc, char** argv){
     config["online_plot_input"] = online_plot_input;
     config["enable_huber_loss"] = use_huber_loss;
 
-    // 设置高斯噪声的随机种子
-    if (config["noise_seed"]) {
-        int seed = config["noise_seed"].as<int>();
-        setNoiseRandomSeed(seed);
-        std::cout << "高斯噪声种子已设置为: " << seed << " (用户指定)" << std::endl;
+    // 设置高斯噪声的随机种子（分离DR与子地图种子以保证在线/离线一致性）
+    int seed_dr = -1, seed_submap = -1;
+    if (config["noise_seed_dr"]) {
+        seed_dr = config["noise_seed_dr"].as<int>();
+        std::cout << "DR边噪声种子已设置为: " << seed_dr << " (用户指定)" << std::endl;
     } else {
-        std::cout << "未指定噪声种子，将使用随机种子" << std::endl;
+        std::cout << "未指定DR边噪声种子，将使用随机种子" << std::endl;
+    }
+    if (config["noise_seed_submap"]) {
+        seed_submap = config["noise_seed_submap"].as<int>();
+        std::cout << "子地图噪声种子已设置为: " << seed_submap << " (用户指定)" << std::endl;
+    } else {
+        std::cout << "未指定子地图噪声种子，将使用随机种子" << std::endl;
     }
 
     // Parse submaps from cereal file
@@ -269,15 +281,26 @@ int main(int argc, char** argv){
     }
     GraphConstructor graph_obj(covs_lc);//
 
-    // Noise generators
-    //初始化噪声生成器和基准测试对象，用于后续的误差评估。
-    GaussianGen transSampler, rotSampler;
-    Matrix<double, 6,6> information = generateGaussianNoise(transSampler, rotSampler);
+    // Noise generators - 分离DR与子地图生成器以保证在线/离线一致性
+    // DR生成器：用于图优化约束的DR边噪声
+    GaussianGen transSampler_DR, rotSampler_DR;
+    if (seed_dr >= 0) {
+        setNoiseRandomSeed(seed_dr);
+    }
+    Matrix<double, 6,6> information_DR = generateGaussianNoise(transSampler_DR, rotSampler_DR);
+    int actualSeed_DR = getCurrentNoiseSeed();
     
-    // 显示实际使用的噪声种子
-    int actualSeed = getCurrentNoiseSeed();
-    std::cout << "=== 噪声系统已初始化 ===" << std::endl;
-    std::cout << "实际使用的噪声种子: " << actualSeed << std::endl;
+    // 子地图生成器：用于GICP配准前的子地图噪声
+    GaussianGen transSampler_SM, rotSampler_SM;
+    if (seed_submap >= 0) {
+        setNoiseRandomSeed(seed_submap);
+    }
+    Matrix<double, 6,6> information_SM = generateGaussianNoise(transSampler_SM, rotSampler_SM);
+    int actualSeed_SM = getCurrentNoiseSeed();
+    
+    std::cout << "=== 噪声系统已初始化（双种子模式）===" << std::endl;
+    std::cout << "DR边实际种子: " << actualSeed_DR << std::endl;
+    std::cout << "子地图实际种子: " << actualSeed_SM << std::endl;
 
     // flag for adding gaussian noise to submaps and graph
     bool add_gaussian_noise = config["add_gaussian_noise"].as<bool>();
@@ -294,7 +317,9 @@ int main(int argc, char** argv){
             std::cout << "---benchmark_gt (online mode)---" << std::endl;
         }
 
-        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, 
+                                              transSampler_DR, rotSampler_DR,
+                                              transSampler_SM, rotSampler_SM, config);
         std::cout << "---build_bathymetric_graphe (online mode)---" <<  std::endl;
 
         if (online_benchmark_enable) {
@@ -312,7 +337,9 @@ int main(int argc, char** argv){
 
         // 进行离线SLAM
         // 注意：此处add_benchmark代码在/home/u/code_workplace/cpp/external/auvlib/src/data_tools/src/benchmark.cpp中
-        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, 
+                                              transSampler_DR, rotSampler_DR,
+                                              transSampler_SM, rotSampler_SM, config);
         std::cout << "---build_bathymetric_graphe---" <<  std::endl;
         add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
         std::cout << "-1_After_GICP_GT-" <<  std::endl;
@@ -322,7 +349,8 @@ int main(int argc, char** argv){
         std::cout << "-3_Before_init_graph_estimates_reg-" <<  std::endl;
 
         // 创建初始图估计
-        create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
+        create_initial_graph_estimate(graph_obj, submaps_reg, 
+                                      transSampler_DR, rotSampler_DR, add_gaussian_noise);
         std::cout << "---create_initial_graph_estimate---" <<  std::endl;
         // 动态重算 range：本阶段因注入误差/初始估计后位姿变换，XY 可能越过以 GT±K 固定的画布，
         // 这里基于当前阶段点云包围盒刷新 track 映射参数，防止越界（注意：仅本阶段像素坐标系与其他阶段不同）。
@@ -365,7 +393,9 @@ int main(int argc, char** argv){
             case 1:
                 // Benchmark GT
                 benchmark_gt(submaps_gt, benchmark);
-                submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+                submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, 
+                                                      transSampler_DR, rotSampler_DR,
+                                                      transSampler_SM, rotSampler_SM, config);
                 visualizer->updateVisualizer(submaps_reg);
                 // Benchmark GT after GICP, the GT submaps have now been moved due to GICP registration
                 add_benchmark(submaps_gt, benchmark, "-1_After_GICP_GT-");
@@ -373,7 +403,8 @@ int main(int argc, char** argv){
                 break;
             case 2:
                 add_benchmark(submaps_reg, benchmark, "-3_Before_init_graph_estimates_reg-");
-                create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
+                create_initial_graph_estimate(graph_obj, submaps_reg, 
+                                              transSampler_DR, rotSampler_DR, add_gaussian_noise);
                 visualizer->plotPoseGraphG2O(graph_obj, submaps_reg);
                 // Benchmark corrupted (or not corrupted if add_gaussian_noise = false)
                 add_benchmark(submaps_reg, benchmark, "-4_After_init_graph_estimates_reg-");
