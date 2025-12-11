@@ -41,6 +41,9 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
     const std::string online_log_path = (config["online_log_path"]) ? config["online_log_path"].as<std::string>() : "build";
     const std::string online_plot_input = (config["online_plot_input"]) ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
     const int default_submap_size = (config["submap_size"]) ? config["submap_size"].as<int>() : 1;
+    const bool use_huber_loss = (config["enable_huber_loss"])
+                                    ? config["enable_huber_loss"].as<bool>()
+                                    : false;
 
     std::unique_ptr<graph_optimization::OnlineLogWriter> online_logger;
     std::vector<Eigen::Isometry3f, Eigen::aligned_allocator<Eigen::Isometry3f>> gt_poses;
@@ -88,7 +91,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt, GaussianGen& transSampl
         boost::filesystem::path graph_path = log_dir / "graph_online_tmp.g2o";
         graph_obj_->saveG2OFile(graph_path.string());
         ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(
-            graph_path.string(), graph_obj_->drEdges_.size(), online_opt_max_iter, false);
+            graph_path.string(), graph_obj_->drEdges_.size(), online_opt_max_iter, false, use_huber_loss);
         ::ceres::optimizer::updateSubmapsCeres(poses, registered_submaps);
     };
 

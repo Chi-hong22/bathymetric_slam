@@ -102,14 +102,16 @@ void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& subm
     std::cout << "初始图形估计构建完成，按空格键继续" << std::endl;
 }
 //图优化
-void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::string outFilename, char* argv0, boost::filesystem::path output_path) {
+void optimize_graph(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, std::string outFilename, char* argv0, boost::filesystem::path output_path, bool use_huber_loss) {
     // 将图保存为g2o文件格式,以便可以用G2O工具进行优化
     graph_obj.saveG2OFile(outFilename);
 
     // 使用Ceres求解器优化图结构
     // poses存储优化后的位姿结果
     // graph_obj.drEdges_.size()表示Dead Reckoning边的数量
-    ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(outFilename, graph_obj.drEdges_.size());
+    // 离线模式显式保持旧版行为：300 次迭代、不导出 debug，保留可控的 Huber 开关
+    ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(
+        outFilename, graph_obj.drEdges_.size(), 300, false, use_huber_loss);
 
     // 使用优化后的位姿更新子地图
     ::ceres::optimizer::updateSubmapsCeres(poses, submaps_reg);
@@ -194,19 +196,23 @@ int main(int argc, char** argv){
     };
 
     const bool online_opt_enable = config["online_opt_enable"] ? config["online_opt_enable"].as<bool>() : false;
+    const bool online_benchmark_enable = config["online_benchmark_enable"] ? config["online_benchmark_enable"].as<bool>() : true;
     const int online_opt_freq = config["online_opt_freq"] ? config["online_opt_freq"].as<int>() : 1;
     const int online_opt_max_iter = config["online_opt_max_iter"] ? config["online_opt_max_iter"].as<int>() : 50;
     std::string online_log_path = config["online_log_path"] ? config["online_log_path"].as<std::string>() : "build";
     std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
+    const bool use_huber_loss = config["enable_huber_loss"] ? config["enable_huber_loss"].as<bool>() : false;
 
     online_log_path = resolvePath(online_log_path);
     online_plot_input = resolvePath(online_plot_input);
 
     config["online_opt_enable"] = online_opt_enable;
+    config["online_benchmark_enable"] = online_benchmark_enable;
     config["online_opt_freq"] = online_opt_freq;
     config["online_opt_max_iter"] = online_opt_max_iter;
     config["online_log_path"] = online_log_path;
     config["online_plot_input"] = online_plot_input;
+    config["enable_huber_loss"] = use_huber_loss;
 
     // 设置高斯噪声的随机种子
     if (config["noise_seed"]) {
@@ -280,53 +286,66 @@ int main(int argc, char** argv){
     std::cout << "Benchmark nbr rows and cols: " << benchmark.benchmark_nbr_rows << ", " << benchmark.benchmark_nbr_cols << std::endl;
 
 #if VISUAL != 1
-    //如果 VISUAL 宏定义不等于1，按照以下顺序执行：
-        // 对地面真值（GT）数据进行基准测试。
-        // 使用GICP方法构建测深图。
-        // 添加基准测试，标记不同阶段的数据状态。
-        // 创建初始图优化估计。
-        // 优化图，并将优化后的结果记录到基准测试中。
+    if (online_opt_enable) {
+        std::cout << "[ONLINE MODE] online_opt_enable=true, freq=" << online_opt_freq
+                  << ", max_iter=" << online_opt_max_iter << std::endl;
+        if (online_benchmark_enable) {
+            benchmark_gt(submaps_gt, benchmark);
+            std::cout << "---benchmark_gt (online mode)---" << std::endl;
+        }
 
-    // 使用ground truth数据对benchmark进行评估
-    benchmark_gt(submaps_gt, benchmark);
-    std::cout << "---benchmark_gt---" <<  std::endl;
+        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+        std::cout << "---build_bathymetric_graphe (online mode)---" <<  std::endl;
 
-    // 进行离线SLAM
-    // 注意：此处add_benchmark代码在/home/u/code_workplace/cpp/external/auvlib/src/data_tools/src/benchmark.cpp中
-    submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
-    std::cout << "---build_bathymetric_graphe---" <<  std::endl;
-    add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
-    std::cout << "-1_After_GICP_GT-" <<  std::endl;
-    add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
-    std::cout << "-2_After_GICP_reg-" <<  std::endl;
-    add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
-    std::cout << "-3_Before_init_graph_estimates_reg-" <<  std::endl;
+        if (online_benchmark_enable) {
+            add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
+            add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg_online");
+        }
 
-    // 创建初始图估计
-    create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
-    std::cout << "---create_initial_graph_estimate---" <<  std::endl;
-    // 动态重算 range：本阶段因注入误差/初始估计后位姿变换，XY 可能越过以 GT±K 固定的画布，
-    // 这里基于当前阶段点云包围盒刷新 track 映射参数，防止越界（注意：仅本阶段像素坐标系与其他阶段不同）。
-    {
-        PointsT map_dyn = pclToMatrixSubmap(submaps_reg);
-        benchmark.track_img_params(map_dyn, /*compute_range_from_points=*/true);
+        std::cout << "[ONLINE MODE] 完成在线增量流程，日志目录: " << online_log_path
+                  << "，误差CSV: " << online_plot_input << std::endl;
+    } else {
+        // 离线批处理流程（保持原有行为）
+        // 使用ground truth数据对benchmark进行评估
+        benchmark_gt(submaps_gt, benchmark);
+        std::cout << "---benchmark_gt---" <<  std::endl;
+
+        // 进行离线SLAM
+        // 注意：此处add_benchmark代码在/home/u/code_workplace/cpp/external/auvlib/src/data_tools/src/benchmark.cpp中
+        submaps_reg = build_bathymetric_graph(graph_obj, submaps_gt, transSampler, rotSampler, config);
+        std::cout << "---build_bathymetric_graphe---" <<  std::endl;
+        add_benchmark(submaps_gt, benchmark, "1_After_GICP_GT");
+        std::cout << "-1_After_GICP_GT-" <<  std::endl;
+        add_benchmark(submaps_reg, benchmark, "2_After_GICP_reg");
+        std::cout << "-2_After_GICP_reg-" <<  std::endl;
+        add_benchmark(submaps_reg, benchmark, "3_Before_init_graph_estimates_reg");
+        std::cout << "-3_Before_init_graph_estimates_reg-" <<  std::endl;
+
+        // 创建初始图估计
+        create_initial_graph_estimate(graph_obj, submaps_reg, transSampler, rotSampler, add_gaussian_noise);
+        std::cout << "---create_initial_graph_estimate---" <<  std::endl;
+        // 动态重算 range：本阶段因注入误差/初始估计后位姿变换，XY 可能越过以 GT±K 固定的画布，
+        // 这里基于当前阶段点云包围盒刷新 track 映射参数，防止越界（注意：仅本阶段像素坐标系与其他阶段不同）。
+        {
+            PointsT map_dyn = pclToMatrixSubmap(submaps_reg);
+            benchmark.track_img_params(map_dyn, /*compute_range_from_points=*/true);
+        }
+        add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
+        std::cout << "-4_After_init_graph_estimates_reg-" <<  std::endl;
+        // 动态重算 range：优化前同样可能出现越界，重复基于点云更新映射参数，保证出图完整
+        {
+            PointsT map_dyn = pclToMatrixSubmap(submaps_reg);
+            benchmark.track_img_params(map_dyn, /*compute_range_from_points=*/true);
+        }
+        add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
+        std::cout << "-5_before_optimize_graph-" <<  std::endl;
+
+        // 优化图
+        optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path, use_huber_loss);
+        std::cout << "---optimize_graph---" <<  std::endl;
+        add_benchmark(submaps_reg, benchmark, "6_optimized");
+        std::cout << "-6_optimizedg-" <<  std::endl;
     }
-    add_benchmark(submaps_reg, benchmark, "4_After_init_graph_estimates_reg");
-    std::cout << "-4_After_init_graph_estimates_reg-" <<  std::endl;
-    // 动态重算 range：优化前同样可能出现越界，重复基于点云更新映射参数，保证出图完整
-    {
-        PointsT map_dyn = pclToMatrixSubmap(submaps_reg);
-        benchmark.track_img_params(map_dyn, /*compute_range_from_points=*/true);
-    }
-    add_benchmark(submaps_reg, benchmark, "5_before_optimize_graph");
-    std::cout << "-5_before_optimize_graph-" <<  std::endl;
-
-    // 优化图
-    optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
-    std::cout << "---optimize_graph---" <<  std::endl;
-    add_benchmark(submaps_reg, benchmark, "6_optimized");
-    std::cout << "-6_optimizedg-" <<  std::endl;
-
 #endif
 
     // Visualization
@@ -361,7 +380,7 @@ int main(int argc, char** argv){
                 break;
             case 3:
                 add_benchmark(submaps_reg, benchmark, "-5_before_optimize_graph-");
-                optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path);
+                optimize_graph(graph_obj, submaps_reg, outFilename, argv[0], output_path, use_huber_loss);
                 // Visualize Ceres output
                 visualizer->plotPoseGraphCeres(submaps_reg);
                 // Benchmark Optimized

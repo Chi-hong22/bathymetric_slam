@@ -59,8 +59,12 @@ dr_noise_yaw: 1e-2  # 1e-2
 lc_edge_covs_type: 2
 
 # 在线增量优化配置
-online_opt_enable: true        # 是否启用在线增量优化
+online_opt_enable: false        # 是否启用在线增量优化
 online_opt_freq: 1              # 每加入多少个子地图触发一次优化
 online_opt_max_iter: 30         # 每次增量优化的最大迭代次数
 online_log_path: build          # 在线日志与误差输出目录
 online_plot_input: build/ping_error.csv   # 绘图脚本读取的误差CSV路径
+online_benchmark_enable: false   # 在线模式下是否生成基准/图像输出
+
+# 鲁棒后端设置
+enable_huber_loss: false         # 是否使用Huber鲁棒核，默认关闭

@@ -18,7 +18,7 @@ namespace optimizer {
 // graph constraints.
 void BuildOptimizationProblem(const VectorOfConstraints& constraints,
                               MapOfPoses* poses, ::ceres::Problem* problem,
-                              int drConstraints) {
+                              int drConstraints, bool use_huber_loss) {
     CHECK(poses != NULL);
     CHECK(problem != NULL);
     if (constraints.empty()) {
@@ -26,8 +26,10 @@ void BuildOptimizationProblem(const VectorOfConstraints& constraints,
         return;
     }
 
-//    LossFunction* loss_function = new ceres::HuberLoss(1);
     LossFunction* loss_function = nullptr;
+    if (use_huber_loss) {
+        loss_function = new ceres::HuberLoss(1.0);
+    }
     SubsetParameterization* z_local_param = new SubsetParameterization(3, std::vector<int>{2});
     SubsetParameterization* roll_pitch_local_param = new SubsetParameterization(3, std::vector<int>{0,1});
 
@@ -227,7 +229,8 @@ bool OutputPoses(const std::string& filename, const MapOfPoses& poses) {
  * 并进行迭代优化直到满足收敛条件。
  */
 MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints,
-                       int max_iterations, bool export_debug_files){
+                       int max_iterations, bool export_debug_files,
+                       bool use_huber_loss){
     // 初始化 Ceres solver
     ::ceres::optimizer::MapOfPoses poses;
     ::ceres::optimizer::VectorOfConstraints constraints;
@@ -245,7 +248,7 @@ MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints,
 
     // 构建Ceres优化问题
     ::ceres::Problem problem;
-    ::ceres::optimizer::BuildOptimizationProblem(constraints, &poses, &problem, drConstraints);
+    ::ceres::optimizer::BuildOptimizationProblem(constraints, &poses, &problem, drConstraints, use_huber_loss);
 
     std::cout << "Ceres problem built" << std::endl;
 

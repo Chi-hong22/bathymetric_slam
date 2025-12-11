@@ -35,7 +35,7 @@ namespace optimizer {
 // graph constraints.
 void BuildOptimizationProblem(const VectorOfConstraints& constraints,
                               MapOfPoses* poses, ::ceres::Problem* problem,
-                              int drConstraints);
+                              int drConstraints, bool use_huber_loss = false);
 
 // Returns true if the solve was successful.
 int SolveOptimizationProblem(::ceres::Problem* problem, int max_iterations = 100);
@@ -44,7 +44,8 @@ int SolveOptimizationProblem(::ceres::Problem* problem, int max_iterations = 100
 bool OutputPoses(const std::string& filename, const MapOfPoses& poses);
 
 MapOfPoses ceresSolver(const std::string& outFilename, const int drConstraints,
-                       int max_iterations = 100, bool export_debug_files = true);
+                       int max_iterations = 100, bool export_debug_files = true,
+                       bool use_huber_loss = false);
 
 void updateSubmapsCeres(const MapOfPoses &poses, SubmapsVec& submaps_set);
 
