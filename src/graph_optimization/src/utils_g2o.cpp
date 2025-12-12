@@ -13,45 +13,74 @@
 #include <random>
 
 namespace {
-    // 定义一个全局作用域内的匿名命名空间来存放全局变量
-    // 避免了使用 static 关键字可能导致的链接问题，并增强了封装性
-    bool seed_is_set_ = false;
-    int current_seed_ = 0;  // 记录当前使用的种子值
-    // 使用 std::unique_ptr 来管理全局随机数生成器的生命周期
-    // 确保在程序退出时能正确释放资源
-    std::unique_ptr<std::mt19937> global_rng_;
-}
+    // 标记dr随机数生成器种子是否已设置
+    bool dr_seed_set_ = false;
+    // 标记submap随机数生成器种子是否已设置
+    bool submap_seed_set_ = false;
+    // dr随机数生成器的种子值
+    int dr_seed_ = 0;
+    // submap随机数生成器的种子值
+    int submap_seed_ = 0;
+    // dr随机数生成器实例
+    std::unique_ptr<std::mt19937> dr_rng_;
+    // submap随机数生成器实例
+    std::unique_ptr<std::mt19937> submap_rng_;
 
-//--- 全局随机数引擎实现 ---//
-void setNoiseRandomSeed(int seed) {
-    // 初始化或重置全局随机数生成器
-    // 使用 make_unique 来安全地创建 std::mt19937 的实例
-    global_rng_ = std::make_unique<std::mt19937>(seed);
-    seed_is_set_ = true;
-    current_seed_ = seed;  // 记录用户设置的种子
-}
-
-bool isNoiseSeedSet() {
-    return seed_is_set_;
-}
-
-std::mt19937& getGlobalNoiseRNG() {
-    // 如果种子未被设置，则首次调用时使用随机设备进行初始化
-    // 确保即使在未明确设置种子的情况下，也能获得一个有效的随机数生成器
-    if (!global_rng_) {
+    /**
+     * @brief 创建指定种子或生成随机种子
+     * 
+     * 如果输入的种子值非负，则直接返回该种子值；
+     * 如果输入的种子值为负，则使用随机设备生成一个随机种子并返回。
+     * 
+     * @param seed 输入的种子值，若为负数则表示需要生成随机种子
+     * @return 返回有效的种子值，非负整数
+     */
+    int makeSeedOrRandom(int seed) {
+        if (seed >= 0) {
+            return seed;
+        }
         std::random_device rd;
-        current_seed_ = rd();  // 记录自动生成的随机种子
-        global_rng_ = std::make_unique<std::mt19937>(current_seed_);
+        return static_cast<int>(rd());
     }
-    return *global_rng_;
 }
 
-int getCurrentNoiseSeed() {
-    // 确保RNG已初始化（这会自动设置种子如果还没有的话）
-    getGlobalNoiseRNG();
-    return current_seed_;
+// 双通道种子初始化，保证 DR / 子图 噪声互不干扰
+void initNoiseRNGs(int seed_dr, int seed_submap) {
+    dr_seed_ = makeSeedOrRandom(seed_dr);
+    submap_seed_ = makeSeedOrRandom(seed_submap);
+    dr_rng_ = std::make_unique<std::mt19937>(dr_seed_);
+    submap_rng_ = std::make_unique<std::mt19937>(submap_seed_);
+    dr_seed_set_ = true;
+    submap_seed_set_ = true;
 }
-//--- 结束 ---//
+
+std::mt19937& getDRNoiseRNG() {
+    if (!dr_rng_) {
+        dr_seed_ = makeSeedOrRandom(dr_seed_set_ ? dr_seed_ : -1);
+        dr_rng_ = std::make_unique<std::mt19937>(dr_seed_);
+        dr_seed_set_ = true;
+    }
+    return *dr_rng_;
+}
+
+std::mt19937& getSubmapNoiseRNG() {
+    if (!submap_rng_) {
+        submap_seed_ = makeSeedOrRandom(submap_seed_set_ ? submap_seed_ : -1);
+        submap_rng_ = std::make_unique<std::mt19937>(submap_seed_);
+        submap_seed_set_ = true;
+    }
+    return *submap_rng_;
+}
+
+int getCurrentDRSeed() {
+    getDRNoiseRNG();
+    return dr_seed_;
+}
+
+int getCurrentSubmapSeed() {
+    getSubmapNoiseRNG();
+    return submap_seed_;
+}
 
 
 using namespace std;
@@ -59,9 +88,9 @@ using namespace g2o;
 using namespace Eigen;
 
 Matrix<double, 6,6> generateGaussianNoise(GaussianGen& transSampler,
-                                          GaussianGen& rotSampler){
+                                          GaussianGen& rotSampler,
+                                          std::mt19937& rng){
 
-    bool randomSeed = true;
     std::vector<double> noiseTranslation;
     std::vector<double> noiseRotation;
     noiseTranslation.push_back(3);
@@ -88,21 +117,9 @@ Matrix<double, 6,6> generateGaussianNoise(GaussianGen& transSampler,
     transSampler.setDistribution(transNoise);
     rotSampler.setDistribution(rotNoise);
 
-    if (isNoiseSeedSet()) {
-        std::mt19937& rng = getGlobalNoiseRNG();
-        // 使用确定性种子，确保可复现性
-        transSampler.seed(rng());
-        rotSampler.seed(rng());
-    }
-    else {
-        // 保持原有的完全随机行为
-        std::random_device r;
-        std::seed_seq seedSeq{r(), r(), r(), r(), r()};
-        vector<int> seeds(2);
-        seedSeq.generate(seeds.begin(), seeds.end());
-        transSampler.seed(seeds[0]);
-        rotSampler.seed(seeds[1]);
-    }
+    // 使用传入的确定性 RNG（对应 DR 或子图 通道），确保可复现性
+    transSampler.seed(rng());
+    rotSampler.seed(rng());
     return information;
 }
 
@@ -132,8 +149,8 @@ void addNoiseToSubmap(GaussianGen& transSampler,
         cerr << "x"; // 表示四元数归一化失败
     }
 
-    // 当前代码中未启用平移噪声，而是引入了一个偏置在 yaw 方向的微小旋转噪声
-    std::mt19937& gen = getGlobalNoiseRNG();
+    // 当前代码中未启用平移噪声，而是引入了一个偏置在 yaw 方向的微小旋转噪声（子图专用 RNG）
+    std::mt19937& gen = getSubmapNoiseRNG();
     std::normal_distribution<> d{0,0.05}; // yaw噪声 原参数0.1弧度(5.73°)
 
     // 构造 yaw 方向的小角度旋转作为扰动
@@ -195,7 +212,7 @@ void addNoiseToMap(GaussianGen& transSampler,
         Eigen::Vector3f gtTrans = meas_i.translation();
 
         // 初始化随机数生成器和正态分布（标准差为0.5）
-        std::mt19937& gen = getGlobalNoiseRNG();
+        std::mt19937& gen = getSubmapNoiseRNG();
         std::normal_distribution<> d{0,0.5};
 
         // 仅在偏航角（yaw）方向添加噪声，roll 和 pitch 保持为 0

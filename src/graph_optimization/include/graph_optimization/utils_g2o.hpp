@@ -28,18 +28,20 @@
 //#include "graph_optimization/graph_construction.hpp"
 
 using namespace std;
-// 全局随机数引擎接口
-void setNoiseRandomSeed(int seed);
-bool isNoiseSeedSet();
-std::mt19937& getGlobalNoiseRNG();
-int getCurrentNoiseSeed();  // 获取当前使用的噪声种子
+// 双通道随机数引擎接口（DR / 子图独立）
+void initNoiseRNGs(int seed_dr, int seed_submap);
+std::mt19937& getDRNoiseRNG();
+std::mt19937& getSubmapNoiseRNG();
+int getCurrentDRSeed();
+int getCurrentSubmapSeed();
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
 typedef pcl::PointXYZ PointT;
 typedef g2o::GaussianSampler<Eigen::Vector3d, Eigen::Matrix3d> GaussianGen;
 
 Matrix<double, 6, 6> generateGaussianNoise(GaussianGen& transSampler,
-                                           GaussianGen& rotSampler);
+                                           GaussianGen& rotSampler,
+                                           std::mt19937& rng);
 
 void addNoiseToSubmap(GaussianGen& transSampler,
                       GaussianGen& rotSampler,

@@ -242,6 +242,8 @@ int main(int argc, char** argv){
     } else {
         std::cout << "未指定子地图噪声种子，将使用随机种子" << std::endl;
     }
+    // 双通道 RNG 初始化：DR 与子图各用独立种子
+    initNoiseRNGs(seed_dr, seed_submap);
 
     // Parse submaps from cereal file
     //解析输入数据并生成子地图
@@ -292,19 +294,17 @@ int main(int argc, char** argv){
     // Noise generators - 分离DR与子地图生成器以保证在线/离线一致性
     // DR生成器：用于图优化约束的DR边噪声
     GaussianGen transSampler_DR, rotSampler_DR;
-    if (seed_dr >= 0) {
-        setNoiseRandomSeed(seed_dr);
-    }
-    Matrix<double, 6,6> information_DR = generateGaussianNoise(transSampler_DR, rotSampler_DR);
-    int actualSeed_DR = getCurrentNoiseSeed();
+    // DR 通道噪声生成使用 DR 专用 RNG
+    std::mt19937& dr_rng = getDRNoiseRNG();
+    Matrix<double, 6,6> information_DR = generateGaussianNoise(transSampler_DR, rotSampler_DR, dr_rng);
+    int actualSeed_DR = getCurrentDRSeed();
     
     // 子地图生成器：用于GICP配准前的子地图噪声
     GaussianGen transSampler_SM, rotSampler_SM;
-    if (seed_submap >= 0) {
-        setNoiseRandomSeed(seed_submap);
-    }
-    Matrix<double, 6,6> information_SM = generateGaussianNoise(transSampler_SM, rotSampler_SM);
-    int actualSeed_SM = getCurrentNoiseSeed();
+    // 子图通道噪声生成使用子图专用 RNG，用于GICP配准前的子地图噪声
+    std::mt19937& submap_rng = getSubmapNoiseRNG();
+    Matrix<double, 6,6> information_SM = generateGaussianNoise(transSampler_SM, rotSampler_SM, submap_rng);
+    int actualSeed_SM = getCurrentSubmapSeed();
     
     std::cout << "=== 噪声系统已初始化（双种子模式）===" << std::endl;
     std::cout << "DR边实际种子: " << actualSeed_DR << std::endl;

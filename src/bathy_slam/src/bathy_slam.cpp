@@ -301,6 +301,23 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
         // 这样计算的结果和离线模式完全等效：离线也是从原始位姿通过createInitialEstimate累积DR链
         ::ceres::optimizer::MapOfPoses corrupted_poses_map;
         
+        // 调试输出
+        std::cout << "\n========== 在线模式 poses_corrupted 生成前检查 ==========" << std::endl;
+        std::cout << "[在线] drMeas_ 数量: " << graph_obj_->drMeas_.size() << std::endl;
+        std::cout << "[在线] submaps_gt[0] 位姿:" << std::endl;
+        std::cout << submaps_gt[0].submap_tf_.matrix() << std::endl;
+        if (!graph_obj_->drMeas_.empty()) {
+            std::cout << "[在线] drMeas_[0-2] translation 和 yaw:" << std::endl;
+            for (size_t i = 0; i < std::min((size_t)3, graph_obj_->drMeas_.size()); ++i) {
+                Eigen::Matrix3d rot = graph_obj_->drMeas_[i].rotation();
+                double yaw = atan2(rot(1,0), rot(0,0));
+                std::cout << "  DR[" << i << "]: translation=" 
+                          << graph_obj_->drMeas_[i].translation().transpose() 
+                          << ", yaw=" << yaw << " rad" << std::endl;
+            }
+        }
+        std::cout << "========================================================\n" << std::endl;
+        
         // 第一个子图使用原始GT位姿
         {
             ::ceres::optimizer::Pose3d pose;
@@ -317,9 +334,15 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
         
         // 后续子图通过累积已加噪的DR边测量计算（等效于离线的createInitialEstimate）
         Eigen::Isometry3d current_pose = submaps_gt[0].submap_tf_.cast<double>();
+        std::cout << "[在线累积] 起始位姿 translation: " 
+                  << current_pose.translation().transpose() << std::endl;
         for (size_t i = 0; i < graph_obj_->drMeas_.size(); ++i) {
             const Eigen::Isometry3d& meas = graph_obj_->drMeas_[i];
             current_pose = current_pose * meas;  // 累积DR测量
+            if (i < 3) {  // 只输出前3次累积结果
+                std::cout << "[在线累积] 累积DR[" << i << "]后位姿 translation: " 
+                          << current_pose.translation().transpose() << std::endl;
+            }
             
             ::ceres::optimizer::Pose3d pose;
             pose.p = current_pose.translation();

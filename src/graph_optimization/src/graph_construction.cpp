@@ -167,7 +167,32 @@ void GraphConstructor::findLoopClosures(SubmapObj& submap_i, const SubmapsVec& s
 
 void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
      std::cout << "-createInitialEstimate-" <<  std::endl;
+     
+    // 调试输出
+    std::cout << "\n========== 离线模式 poses_corrupted 生成前检查 ==========" << std::endl;
+    std::cout << "[离线] drMeas_ 数量: " << drMeas_.size() << std::endl;
+    if (!vertices_.empty()) {
+        std::cout << "[离线] vertices_[0] estimate:" << std::endl;
+        std::cout << vertices_[0]->estimate().matrix() << std::endl;
+    }
+    if (!drMeas_.empty()) {
+        std::cout << "[离线] drMeas_[0-2] translation 和 yaw:" << std::endl;
+        for (size_t i = 0; i < std::min((size_t)3, drMeas_.size()); ++i) {
+            Eigen::Matrix3d rot = drMeas_[i].rotation();
+            double yaw = atan2(rot(1,0), rot(0,0));
+            std::cout << "  DR[" << i << "]: translation=" 
+                      << drMeas_[i].translation().transpose() 
+                      << ", yaw=" << yaw << " rad" << std::endl;
+        }
+    }
+    std::cout << "========================================================\n" << std::endl;
+    
     // Concatenate all the odometry constraints to compute the initial kinematic chain
+    if (!drEdges_.empty()) {
+        VertexSE3* first = static_cast<VertexSE3*>(drEdges_[0]->vertex(0));
+        std::cout << "[离线累积] 起始位姿 translation: " 
+                  << first->estimate().translation().transpose() << std::endl;
+    }
     for (size_t i =0; i < drEdges_.size(); i++) {
         Eigen::Isometry3d meas_i = drMeas_.at(i);
         EdgeSE3* e = drEdges_[i];
@@ -176,6 +201,10 @@ void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
 
         // Transform submap_i pcl and tf
         Eigen::Isometry3d estimate_i = from->estimate() * meas_i;
+        if (i < 3) {  // 只输出前3次累积结果
+            std::cout << "[离线累积] 累积DR[" << i << "]后位姿 translation: " 
+                      << estimate_i.translation().transpose() << std::endl;
+        }
         pcl::transformPointCloud(submaps_set.at(i+1).submap_pcl_, submaps_set.at(i+1).submap_pcl_,
                                  (estimate_i.cast<float>() * submaps_set.at(i+1).submap_tf_.cast<float>().inverse()).matrix());
 
@@ -200,33 +229,49 @@ void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
  */
 void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
 
-    std::mt19937& gen = getGlobalNoiseRNG();
-    std::normal_distribution<> d{0,0.005}; // 实际应用的yaw噪声分布——原参数 0.01 
+    // DR 噪声仅消费 DR 通道 RNG，避免受子图噪声影响
+    std::mt19937& gen = getDRNoiseRNG();
+    // std::normal_distribution<> d{0,0.005}; // 这部分转移到for以内，保证每次都创建新distribution，避免Box-Muller算法的缓存导致在线/离线RNG消费模式不同
+
+    std::cout << "[离线批量加噪] 开始为 " << drEdges_.size() << " 条DR边加噪" << std::endl;
+    if (!drMeas_.empty()) {
+        std::cout << "[离线批量加噪前] drMeas_[0] translation: " 
+                  << drMeas_[0].translation().transpose() << std::endl;
+    }
 
     // 为所有DR边添加噪声
     for (size_t i = 0; i < drEdges_.size(); ++i) {
+      // 重要：每次都创建新distribution，避免Box-Muller算法的缓存导致在线/离线RNG消费模式不同
+      std::normal_distribution<> d{0,0.005}; // 实际应用的yaw噪声分布——原参数 0.01 
+      
       Eigen::Isometry3d meas_i = drMeas_.at(i);
       Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)meas_i.linear();
       Eigen::Vector3d gtTrans = meas_i.translation();
 
       // 添加偏航角偏差噪声
       double roll = 0.0, pitch = 0.0, yaw = /*0.001*/ d(gen);
+      if (i < 3) {  // 只输出前3条，避免刷屏
+          std::cout << "[离线批量加噪] DR[" << i << "] yaw噪声: " << yaw << " rad" << std::endl;
+      }
       Matrix3d m;
       m = AngleAxisd(roll, Vector3d::UnitX())
           * AngleAxisd(pitch, Vector3d::UnitY())
           * AngleAxisd(yaw, Vector3d::UnitZ());
 
-      Eigen::Vector3d quatXYZ = rotSampler.generateSample();
-      double qw = 1.0 - quatXYZ.norm();
-      if (qw < 0) {
-        qw = 0.;
-        cerr << "x";
-      }
-//      Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());
+      // 注意：以下代码已注释，因为当前实现只使用 yaw 噪声
+      // rotSampler.generateSample() 会消费采样器的 RNG 状态，导致在线/离线不一致
+      // Eigen::Vector3d quatXYZ = rotSampler.generateSample();
+      // double qw = 1.0 - quatXYZ.norm();
+      // if (qw < 0) {
+      //   qw = 0.;
+      //   cerr << "x";
+      // }
+      // Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());
       Eigen::Quaterniond rot(m);
 
       Eigen::Vector3d trans;
-//      trans = transSampler.generateSample();
+      // transSampler.generateSample() 同样会消费 RNG，已注释
+      // trans = transSampler.generateSample();
       trans.setZero();
 
       // 将噪声与真实值合成
@@ -240,6 +285,11 @@ void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& r
     if (!drEdges_.empty()) {
         dr_noise_applied_ = true;
     }
+    
+    if (!drMeas_.empty()) {
+        std::cout << "[离线批量加噪后] drMeas_[0] translation: " 
+                  << drMeas_[0].translation().transpose() << std::endl;
+    }
 }
 
 void GraphConstructor::addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler){
@@ -247,29 +297,37 @@ void GraphConstructor::addNoiseToLastDREdge(GaussianGen& transSampler, GaussianG
     if (drEdges_.empty()) {
         return;
     }
-    std::mt19937& gen = getGlobalNoiseRNG();
+    // 在线模式逐边加噪仍使用 DR 通道 RNG，保证与离线一致
+    std::mt19937& gen = getDRNoiseRNG();
     std::normal_distribution<> d{0,0.005};
 
     const size_t idx = drMeas_.size() - 1;
+    Eigen::Vector3d trans_before = drMeas_.at(idx).translation();
     Eigen::Isometry3d meas_i = drMeas_.at(idx);
     Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)meas_i.linear();
     Eigen::Vector3d gtTrans = meas_i.translation();
 
     double roll = 0.0, pitch = 0.0, yaw = d(gen);
+    std::cout << "[在线逐边加噪] DR[" << idx << "] yaw噪声: " << yaw << " rad" << std::endl;
     Matrix3d m;
     m = AngleAxisd(roll, Vector3d::UnitX())
         * AngleAxisd(pitch, Vector3d::UnitY())
         * AngleAxisd(yaw, Vector3d::UnitZ());
 
-    Eigen::Vector3d quatXYZ = rotSampler.generateSample();
-    double qw = 1.0 - quatXYZ.norm();
-    if (qw < 0) {
-        qw = 0.;
-        cerr << "x";
-    }
+    // 注意：以下代码已注释，因为当前实现只使用 yaw 噪声
+    // rotSampler.generateSample() 会消费采样器的 RNG 状态，导致在线/离线不一致
+    // Eigen::Vector3d quatXYZ = rotSampler.generateSample();
+    // double qw = 1.0 - quatXYZ.norm();
+    // if (qw < 0) {
+    //     qw = 0.;
+    //     cerr << "x";
+    // }
+    // Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());
     Eigen::Quaterniond rot(m);
 
     Eigen::Vector3d trans;
+    // transSampler.generateSample() 同样会消费 RNG，已注释
+    // trans = transSampler.generateSample();
     trans.setZero();
 
     rot = gtQuat * rot;
@@ -279,6 +337,9 @@ void GraphConstructor::addNoiseToLastDREdge(GaussianGen& transSampler, GaussianG
     noisyMeasurement.translation() = trans;
     drMeas_.at(idx) = noisyMeasurement;
     dr_noise_applied_ = true;
+    
+    std::cout << "[在线逐边加噪] DR[" << idx << "] 加噪后 translation: " 
+              << noisyMeasurement.translation().transpose() << std::endl;
 }
 
 void GraphConstructor::saveG2OFile(std::string outFilename){
