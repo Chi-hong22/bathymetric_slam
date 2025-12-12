@@ -66,7 +66,10 @@ online_opt_freq: 1              # 每加入多少个子地图触发一次优化
 online_opt_max_iter: 30         # 每次增量优化的最大迭代次数
 online_log_path: build          # 在线日志与误差输出目录
 online_plot_input: build/ping_error.csv   # 绘图脚本读取的误差CSV路径
-online_benchmark_enable: false   # 在线模式下是否生成基准/图像输出
+online_benchmark_enable: true   # 在线模式下是否生成基准/图像输出
+online_opt_snapshot_enable: false           # 是否启用在线优化快照输出
+online_opt_snapshot_freq: 1                 # 快照频率，按当前节点数取模
+online_opt_snapshot_dir: poses_optimized_online_log  # 快照子目录名称（挂在 online_log_path 下）
 
 # 鲁棒后端设置
 enable_huber_loss: false         # 是否使用Huber鲁棒核，默认关闭

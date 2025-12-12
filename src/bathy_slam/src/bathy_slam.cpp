@@ -47,6 +47,15 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
     const bool use_huber_loss = (config["enable_huber_loss"])
                                     ? config["enable_huber_loss"].as<bool>()
                                     : false;
+    const bool online_snapshot_enable = (config["online_opt_snapshot_enable"])
+                                            ? config["online_opt_snapshot_enable"].as<bool>()
+                                            : false;
+    const int online_snapshot_freq = (config["online_opt_snapshot_freq"])
+                                         ? config["online_opt_snapshot_freq"].as<int>()
+                                         : 1;
+    const std::string online_snapshot_dir = (config["online_opt_snapshot_dir"])
+                                                ? config["online_opt_snapshot_dir"].as<std::string>()
+                                                : "poses_optimized_online_log";
 
     std::unique_ptr<graph_optimization::OnlineLogWriter> online_logger;
     std::vector<Eigen::Isometry3f, Eigen::aligned_allocator<Eigen::Isometry3f>> gt_poses;
@@ -68,9 +77,18 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
         online_logger = std::make_unique<graph_optimization::OnlineLogWriter>(online_log_path, online_plot_input);
     }
     boost::filesystem::path log_dir(online_log_path);
+    boost::filesystem::path snapshot_dir_path(online_snapshot_dir);
     if (online_enabled && !log_dir.empty()) {
         boost::filesystem::create_directories(log_dir);
+        if (online_snapshot_enable) {
+            if (snapshot_dir_path.is_relative()) {
+                snapshot_dir_path = log_dir / snapshot_dir_path;
+            }
+            boost::filesystem::create_directories(snapshot_dir_path);
+        }
     }
+
+    ::ceres::optimizer::MapOfPoses last_online_poses;
 
     auto tryRunOnlineOptimization = [&](SubmapsVec& registered_submaps) {
         if (!online_enabled || !online_logger) {
@@ -96,6 +114,16 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
         ::ceres::optimizer::MapOfPoses poses = ::ceres::optimizer::ceresSolver(
             graph_path.string(), graph_obj_->drEdges_.size(), online_opt_max_iter, false, use_huber_loss);
         ::ceres::optimizer::updateSubmapsCeres(poses, registered_submaps);
+        last_online_poses = poses;
+
+        if (online_snapshot_enable && online_snapshot_freq > 0) {
+            if (registered_count > 0 && (registered_count % online_snapshot_freq) == 0) {
+                boost::filesystem::path snapshot_path = snapshot_dir_path / ("poses_optimized_step_" + std::to_string(registered_count) + ".txt");
+                CHECK(::ceres::optimizer::OutputPoses(snapshot_path.string(), poses))
+                    << "Error outputting online snapshot to " << snapshot_path.string();
+                std::cout << "[在线模式] 已保存优化快照: " << snapshot_path.string() << std::endl;
+            }
+        }
     };
 
     // 初始化回环闭合的信息阈值，较高的信息阈值意味着更严格的回环闭合筛选标准
@@ -242,6 +270,72 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
         const std::string raw_log_file = (log_dir / "online_log.csv").string();
         online_logger->writeRawLog(raw_log_file);
         online_logger->writePingErrorCsv();
+        
+        // 在线模式结束时，输出poses_corrupted.txt和poses_optimized.txt
+        std::cout << "[在线模式] 正在导出最终位姿文件..." << std::endl;
+        
+        // 1. 输出最终poses_optimized.txt（优先使用最后一次优化返回的poses缓存）
+        ::ceres::optimizer::MapOfPoses optimized_poses_map;
+        if (!last_online_poses.empty()) {
+            optimized_poses_map = last_online_poses;
+        } else {
+            for (size_t i = 0; i < submaps_reg.size(); ++i) {
+                ::ceres::optimizer::Pose3d pose;
+                Eigen::Isometry3f tf = submaps_reg[i].submap_tf_;
+                pose.p = tf.translation().cast<double>();
+                // 从旋转矩阵转换为欧拉角 (roll, pitch, yaw)
+                Eigen::Matrix3f rot = tf.rotation();
+                Eigen::Vector3d euler;
+                euler[0] = atan2(rot(2,1), rot(2,2));  // roll
+                euler[1] = atan2(-rot(2,0), sqrt(rot(2,1)*rot(2,1) + rot(2,2)*rot(2,2)));  // pitch
+                euler[2] = atan2(rot(1,0), rot(0,0));  // yaw
+                pose.q = euler;
+                optimized_poses_map[i] = pose;
+            }
+        }
+        CHECK(::ceres::optimizer::OutputPoses("poses_optimized.txt", optimized_poses_map))
+            << "Error outputting poses_optimized.txt in online mode";
+        std::cout << "[在线模式] 已导出 poses_optimized.txt" << std::endl;
+        
+        // 2. 计算poses_corrupted.txt（从原始GT位姿开始累积已加噪的DR边测量）
+        // 这样计算的结果和离线模式完全等效：离线也是从原始位姿通过createInitialEstimate累积DR链
+        ::ceres::optimizer::MapOfPoses corrupted_poses_map;
+        
+        // 第一个子图使用原始GT位姿
+        {
+            ::ceres::optimizer::Pose3d pose;
+            Eigen::Isometry3f tf = submaps_gt[0].submap_tf_;
+            pose.p = tf.translation().cast<double>();
+            Eigen::Matrix3f rot = tf.rotation();
+            Eigen::Vector3d euler;
+            euler[0] = atan2(rot(2,1), rot(2,2));  // roll
+            euler[1] = atan2(-rot(2,0), sqrt(rot(2,1)*rot(2,1) + rot(2,2)*rot(2,2)));  // pitch
+            euler[2] = atan2(rot(1,0), rot(0,0));  // yaw
+            pose.q = euler;
+            corrupted_poses_map[0] = pose;
+        }
+        
+        // 后续子图通过累积已加噪的DR边测量计算（等效于离线的createInitialEstimate）
+        Eigen::Isometry3d current_pose = submaps_gt[0].submap_tf_.cast<double>();
+        for (size_t i = 0; i < graph_obj_->drMeas_.size(); ++i) {
+            const Eigen::Isometry3d& meas = graph_obj_->drMeas_[i];
+            current_pose = current_pose * meas;  // 累积DR测量
+            
+            ::ceres::optimizer::Pose3d pose;
+            pose.p = current_pose.translation();
+            Eigen::Matrix3d rot = current_pose.rotation();
+            Eigen::Vector3d euler;
+            euler[0] = atan2(rot(2,1), rot(2,2));  // roll
+            euler[1] = atan2(-rot(2,0), sqrt(rot(2,1)*rot(2,1) + rot(2,2)*rot(2,2)));  // pitch
+            euler[2] = atan2(rot(1,0), rot(0,0));  // yaw
+            pose.q = euler;
+            corrupted_poses_map[i + 1] = pose;
+        }
+        
+        CHECK(::ceres::optimizer::OutputPoses("poses_corrupted.txt", corrupted_poses_map))
+            << "Error outputting poses_corrupted.txt in online mode";
+        std::cout << "[在线模式] 已导出 poses_corrupted.txt（从GT位姿累积DR链）" << std::endl;
+        std::cout << "[在线模式] poses文件导出完成" << std::endl;
     }
 
     // 返回已注册的子图

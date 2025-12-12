@@ -208,9 +208,14 @@ int main(int argc, char** argv){
     std::string online_log_path = config["online_log_path"] ? config["online_log_path"].as<std::string>() : "build";
     std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
     const bool use_huber_loss = config["enable_huber_loss"] ? config["enable_huber_loss"].as<bool>() : false;
+    const bool online_opt_snapshot_enable = config["online_opt_snapshot_enable"] ? config["online_opt_snapshot_enable"].as<bool>() : false;
+    const int online_opt_snapshot_freq = config["online_opt_snapshot_freq"] ? config["online_opt_snapshot_freq"].as<int>() : 1;
+    std::string online_opt_snapshot_dir = config["online_opt_snapshot_dir"] ? config["online_opt_snapshot_dir"].as<std::string>() : "poses_optimized_online_log";
 
     online_log_path = resolvePath(online_log_path);
     online_plot_input = resolvePath(online_plot_input);
+    // 快照目录挂在 online_log_path 下
+    online_opt_snapshot_dir = (boost::filesystem::path(online_log_path) / online_opt_snapshot_dir).lexically_normal().string();
 
     config["online_opt_enable"] = online_opt_enable;
     config["online_benchmark_enable"] = online_benchmark_enable;
@@ -219,6 +224,9 @@ int main(int argc, char** argv){
     config["online_log_path"] = online_log_path;
     config["online_plot_input"] = online_plot_input;
     config["enable_huber_loss"] = use_huber_loss;
+    config["online_opt_snapshot_enable"] = online_opt_snapshot_enable;
+    config["online_opt_snapshot_freq"] = online_opt_snapshot_freq;
+    config["online_opt_snapshot_dir"] = online_opt_snapshot_dir;
 
     // 设置高斯噪声的随机种子（分离DR与子地图种子以保证在线/离线一致性）
     int seed_dr = -1, seed_submap = -1;
