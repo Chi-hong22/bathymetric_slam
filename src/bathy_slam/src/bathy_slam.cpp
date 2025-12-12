@@ -38,6 +38,8 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
 
     // 解析在线 SLAM 相关参数
     const bool add_gaussian_noise = (config["add_gaussian_noise"]) ? config["add_gaussian_noise"].as<bool>() : false;
+    const double submap_level_yaw_std = (config["submap_level_yaw_std"]) ? config["submap_level_yaw_std"].as<double>() : 0.05;  // 默认值与硬编码一致
+    const double graph_level_yaw_std = (config["graph_level_yaw_std"]) ? config["graph_level_yaw_std"].as<double>() : 0.005;  // 默认值与硬编码一致
     const bool online_enabled = (config["online_opt_enable"]) ? config["online_opt_enable"].as<bool>() : false;
     const int online_opt_freq = (config["online_opt_freq"]) ? config["online_opt_freq"].as<int>() : 1;
     const int online_opt_max_iter = (config["online_opt_max_iter"]) ? config["online_opt_max_iter"].as<int>() : 50;
@@ -175,7 +177,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
             graph_obj_->createDREdge(submap_i);
             // 在线模式：逐边加噪（用于实时误差累积）；离线模式：保持批量加噪（保证随机数消耗顺序一致）
             if (add_gaussian_noise && online_enabled) {
-                graph_obj_->addNoiseToLastDREdge(transSampler_DR, rotSampler_DR);
+                graph_obj_->addNoiseToLastDREdge(transSampler_DR, rotSampler_DR, graph_level_yaw_std);
             }
             if (online_enabled && !dr_poses.empty() &&
                 submap_i.submap_id_ >= 0 &&
@@ -202,7 +204,7 @@ SubmapsVec BathySlam::runOffline(SubmapsVec& submaps_gt,
             // 构建目标子地图，合并与当前子图重叠的已注册子地图
             submap_trg = gicp_reg_->constructTrgSubmap(submaps_reg, submap_i.overlaps_idx_, dr_noise);
             if (add_gaussian_noise) {
-                addNoiseToSubmap(transSampler_SM, rotSampler_SM, submap_i); // 向子地图添加误差扰动（使用独立种子）
+                addNoiseToSubmap(transSampler_SM, rotSampler_SM, submap_i, submap_level_yaw_std); // 向子地图添加误差扰动（使用独立种子）
             }
 
             // Compute initial guess for GICP

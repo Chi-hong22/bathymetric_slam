@@ -15,6 +15,10 @@ noise_seed_submap: 21  # 子地图噪声种子（影响GICP配准）
 # sim_data/250826_sub_maps/NESP_noINS_shortTest：seed 40  20
 # 注意：使用两个独立种子以保证在线/离线模式DR噪声一致性
 
+# 高斯噪声标准差（仅 yaw 轴生效；其余轴暂不使用）
+submap_level_yaw_std: 0.05   # 第一阶段（匹配前）子地图噪声 yaw 标准差（弧度）
+graph_level_yaw_std: 0.005   # 第二阶段（匹配后）图边噪声 yaw 标准差（弧度）
+
 # 子地图重叠放缩系数。参数越小，则对子地图的重叠区域要求越严格。
 # 对当前子图 i 和待检查的子图 j，都用 overlap_coverage 计算出它们缩放后的虚拟边界框。
 # 调用 checkSubmapsOverlap 函数，判断子图 i 的角点是否完全位于子图 j 的（缩放后）边界框内部。

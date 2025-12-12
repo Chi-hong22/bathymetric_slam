@@ -227,11 +227,11 @@ void GraphConstructor::createInitialEstimate(SubmapsVec& submaps_set){
  * 
  * @note 该函数会直接修改类成员变量drMeas_中的测量值
  */
-void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
+void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler, double yaw_std){
 
     // DR 噪声仅消费 DR 通道 RNG，避免受子图噪声影响
     std::mt19937& gen = getDRNoiseRNG();
-    // std::normal_distribution<> d{0,0.005}; // 这部分转移到for以内，保证每次都创建新distribution，避免Box-Muller算法的缓存导致在线/离线RNG消费模式不同
+    // std::normal_distribution<> d{0, yaw_std}; // 这部分转移到for以内，保证每次都创建新distribution，避免Box-Muller算法的缓存导致在线/离线RNG消费模式不同
 
     std::cout << "[离线批量加噪] 开始为 " << drEdges_.size() << " 条DR边加噪" << std::endl;
     if (!drMeas_.empty()) {
@@ -242,7 +242,7 @@ void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& r
     // 为所有DR边添加噪声
     for (size_t i = 0; i < drEdges_.size(); ++i) {
       // 重要：每次都创建新distribution，避免Box-Muller算法的缓存导致在线/离线RNG消费模式不同
-      std::normal_distribution<> d{0,0.005}; // 实际应用的yaw噪声分布——原参数 0.01 
+      std::normal_distribution<> d{0, yaw_std}; // yaw噪声分布 从配置文件读取（默认0.005弧度） 
       
       Eigen::Isometry3d meas_i = drMeas_.at(i);
       Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)meas_i.linear();
@@ -292,14 +292,14 @@ void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& r
     }
 }
 
-void GraphConstructor::addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler){
+void GraphConstructor::addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler, double yaw_std){
 
     if (drEdges_.empty()) {
         return;
     }
     // 在线模式逐边加噪仍使用 DR 通道 RNG，保证与离线一致
     std::mt19937& gen = getDRNoiseRNG();
-    std::normal_distribution<> d{0,0.005};
+    std::normal_distribution<> d{0, yaw_std}; // yaw噪声分布 从配置文件读取（默认0.005弧度）
 
     const size_t idx = drMeas_.size() - 1;
     Eigen::Vector3d trans_before = drMeas_.at(idx).translation();

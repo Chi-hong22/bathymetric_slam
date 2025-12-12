@@ -45,7 +45,8 @@ Matrix<double, 6, 6> generateGaussianNoise(GaussianGen& transSampler,
 
 void addNoiseToSubmap(GaussianGen& transSampler,
                       GaussianGen& rotSampler,
-                      SubmapObj& submap);
+                      SubmapObj& submap,
+                      double yaw_std);  // yaw 轴标准差（仅 yaw 生效）
 
 void addNoiseToMap(GaussianGen& transSampler,
                    GaussianGen& rotSampler,

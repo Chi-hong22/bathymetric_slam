@@ -64,8 +64,8 @@ public:
 
     void createDREdge(const SubmapObj& submap);
 
-    void addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler);
-    void addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler);
+    void addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler, double yaw_std);  // yaw 轴标准差（仅 yaw 生效）
+    void addNoiseToLastDREdge(GaussianGen& transSampler, GaussianGen& rotSampler, double yaw_std);  // yaw 轴标准差（仅 yaw 生效）
 
     bool isDRNoiseApplied() const { return dr_noise_applied_; }
 

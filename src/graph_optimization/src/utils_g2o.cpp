@@ -135,7 +135,8 @@ Matrix<double, 6,6> generateGaussianNoise(GaussianGen& transSampler,
  */
 void addNoiseToSubmap(GaussianGen& transSampler,
                       GaussianGen& rotSampler,
-                      SubmapObj& submap){
+                      SubmapObj& submap,
+                      double yaw_std){
 
     // 提取子地图当前的旋转四元数和平移向量
     Eigen::Quaterniond gtQuat = (Eigen::Quaterniond)submap.submap_tf_.linear().cast<double>();
@@ -151,7 +152,7 @@ void addNoiseToSubmap(GaussianGen& transSampler,
 
     // 当前代码中未启用平移噪声，而是引入了一个偏置在 yaw 方向的微小旋转噪声（子图专用 RNG）
     std::mt19937& gen = getSubmapNoiseRNG();
-    std::normal_distribution<> d{0,0.05}; // yaw噪声 原参数0.1弧度(5.73°)
+    std::normal_distribution<> d{0, yaw_std}; // yaw噪声 从配置文件读取（默认0.05弧度）
 
     // 构造 yaw 方向的小角度旋转作为扰动
     double roll = 0.0, pitch = 0.0, yaw = /*0.001*/ d(gen);

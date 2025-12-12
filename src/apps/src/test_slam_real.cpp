@@ -95,12 +95,12 @@ SubmapsVec build_bathymetric_graph(GraphConstructor& graph_obj, SubmapsVec& subm
 // 创建初始图形估计，如果add_gaussian_noise=true，则可选择添加高斯噪声
 void create_initial_graph_estimate(GraphConstructor& graph_obj, SubmapsVec& submaps_reg, 
                                    GaussianGen& transSampler_DR, GaussianGen& rotSampler_DR, 
-                                   bool add_gaussian_noise) {
+                                   bool add_gaussian_noise, double graph_level_yaw_std) {
     std::cout << "是否添加高斯噪声 = " << add_gaussian_noise << std::endl;
     if (add_gaussian_noise && !graph_obj.isDRNoiseApplied()) {
         // 向图中的DR边添加噪声（离线模式批量加噪，保证随机序列一致性）
         std::cout << "正在添加高斯噪声到所有DR边（离线批量模式）..." << std::endl;
-        graph_obj.addNoiseToGraph(transSampler_DR, rotSampler_DR);
+        graph_obj.addNoiseToGraph(transSampler_DR, rotSampler_DR, graph_level_yaw_std);
         std::cout << "已成功向图添加高斯噪声" << std::endl;
     }
     // 创建初始DR链并可视化
@@ -208,6 +208,7 @@ int main(int argc, char** argv){
     std::string online_log_path = config["online_log_path"] ? config["online_log_path"].as<std::string>() : "build";
     std::string online_plot_input = config["online_plot_input"] ? config["online_plot_input"].as<std::string>() : "build/ping_error.csv";
     const bool use_huber_loss = config["enable_huber_loss"] ? config["enable_huber_loss"].as<bool>() : false;
+    const double graph_level_yaw_std = config["graph_level_yaw_std"] ? config["graph_level_yaw_std"].as<double>() : 0.005;  // 默认值与硬编码一致
     const bool online_opt_snapshot_enable = config["online_opt_snapshot_enable"] ? config["online_opt_snapshot_enable"].as<bool>() : false;
     const int online_opt_snapshot_freq = config["online_opt_snapshot_freq"] ? config["online_opt_snapshot_freq"].as<int>() : 1;
     std::string online_opt_snapshot_dir = config["online_opt_snapshot_dir"] ? config["online_opt_snapshot_dir"].as<std::string>() : "poses_optimized_online_log";
@@ -358,7 +359,7 @@ int main(int argc, char** argv){
 
         // 创建初始图估计
         create_initial_graph_estimate(graph_obj, submaps_reg, 
-                                      transSampler_DR, rotSampler_DR, add_gaussian_noise);
+                                      transSampler_DR, rotSampler_DR, add_gaussian_noise, graph_level_yaw_std);
         std::cout << "---create_initial_graph_estimate---" <<  std::endl;
         // 动态重算 range：本阶段因注入误差/初始估计后位姿变换，XY 可能越过以 GT±K 固定的画布，
         // 这里基于当前阶段点云包围盒刷新 track 映射参数，防止越界（注意：仅本阶段像素坐标系与其他阶段不同）。
@@ -412,7 +413,7 @@ int main(int argc, char** argv){
             case 2:
                 add_benchmark(submaps_reg, benchmark, "-3_Before_init_graph_estimates_reg-");
                 create_initial_graph_estimate(graph_obj, submaps_reg, 
-                                              transSampler_DR, rotSampler_DR, add_gaussian_noise);
+                                              transSampler_DR, rotSampler_DR, add_gaussian_noise, graph_level_yaw_std);
                 visualizer->plotPoseGraphG2O(graph_obj, submaps_reg);
                 // Benchmark corrupted (or not corrupted if add_gaussian_noise = false)
                 add_benchmark(submaps_reg, benchmark, "-4_After_init_graph_estimates_reg-");

@@ -26,8 +26,8 @@
 4. `online_opt_enable` - **模式开关**，决定DR边噪声注入时机
 
 **两个注入阶段**：
-- **第一阶段**（子地图级）：GICP配准**前**，标准差 0.1 弧度
-- **第二阶段**（图边级）：图优化**前**，标准差 0.01 弧度
+- **第一阶段**（子地图级）：GICP配准**前**，标准差 0.05 弧度
+- **第二阶段**（图边级）：图优化**前**，标准差 0.005 弧度
 
 **双种子必要性**：
 - 在线模式：DR边逐个加噪（边0→子图1→边1→子图2→...）
@@ -113,6 +113,18 @@ noise_seed_submap: 21      # 子地图噪声种子（影响GICP配准）
 2. **保证一致性**：无论在线/离线模式，"第i条DR边"总是从DR生成器拿到相同的噪声值
 3. **便于调试**：可独立控制DR/子地图噪声的可复现性，分离测试前端和后端鲁棒性
 4. **向后兼容**：离线模式保持旧版批量加噪行为，结果可与历史版本对齐
+
+**技术实现关键点**：
+
+系统采用双通道RNG架构确保完全独立：
+- `initNoiseRNGs(seed_dr, seed_submap)` - 初始化两个独立的 `std::mt19937` 实例
+- `getDRNoiseRNG()` - 返回DR边专用RNG引用
+- `getSubmapNoiseRNG()` - 返回子图专用RNG引用
+- 每个噪声注入点显式使用对应通道的RNG，避免交叉污染
+
+**重要注意事项**：
+- ⚠️ **std::normal_distribution 缓存问题**：由于Box-Muller算法内部缓存机制，必须在每次加噪时创建新的 distribution 实例，否则离线批量加噪和在线逐边加噪的RNG消费模式会不同，导致相同种子下结果不一致
+- ⚠️ **无效代码清理**：任何调用 `rotSampler.generateSample()` 或 `transSampler.generateSample()` 但不使用结果的代码都会消费RNG状态，必须注释掉以保证一致性
 
 ## 核心参数关系与工作流程
 
@@ -321,109 +333,50 @@ for (int i = 0; i < 3; ++i)
 随机种子决定的是**从噪声分布中具体采样什么数值**：
 
 ```cpp
-// 设置噪声采样器的分布参数（定义"规格"）
-transSampler.setDistribution(transNoise);  
-rotSampler.setDistribution(rotNoise);
+// 当前版本：噪声采样器显式绑定对应通道 RNG（DR / 子图各自独立）
+// 1) 先在入口调用 initNoiseRNGs(seed_dr, seed_submap)
+// 2) 再分别用 getDRNoiseRNG() / getSubmapNoiseRNG() 初始化采样器
+std::mt19937& dr_rng = getDRNoiseRNG();
+std::mt19937& submap_rng = getSubmapNoiseRNG();
 
-// 随机种子决定从分布中采样的具体数值序列
-if (isNoiseSeedSet()) {
-    std::mt19937& rng = getGlobalNoiseRNG();
-    transSampler.seed(rng());  // 使用确定性种子
-    rotSampler.seed(rng());
-} else {
-    // 使用硬件随机数源产生的随机种子
-    std::random_device r;
-    std::seed_seq seedSeq{r(), r(), r(), r(), r()};
-    vector<int> seeds(2);
-    seedSeq.generate(seeds.begin(), seeds.end());
-    transSampler.seed(seeds[0]);
-    rotSampler.seed(seeds[1]);
-}
+generateGaussianNoise(transSampler_DR, rotSampler_DR, dr_rng);
+generateGaussianNoise(transSampler_SM, rotSampler_SM, submap_rng);
 ```
 
-#### 2.3 为什么没有种子时每次效果不同？
+#### 2.3（缩减）随机 vs 可复现
 
-在没有设置 `noise_seed` 之前，每次运行的随机化过程：
+- **可复现**：在 `config.yaml` 设置 `noise_seed_dr` 与 `noise_seed_submap`（例如 20/21），并保持在线/离线使用同一组值。
+- **随机**：不设置上述两个种子（或设置为无效值），程序会为两个通道各自生成随机种子。
 
-1. **硬件随机源**：`std::random_device` 产生真正的随机数（来自硬件熵源）
-2. **种子生成**：每次运行产生不同的种子序列
-3. **结果差异**：相同噪声参数 + 不同种子 = 不同的噪声数值序列
-
-**具体例子**：
-
-假设yaw噪声参数固定为标准差0.01：
-
-```
-运行1（随机种子=12345）：yaw噪声序列 [0.008, -0.003, 0.011, -0.007, ...]
-运行2（随机种子=67890）：yaw噪声序列 [-0.004, 0.009, -0.002, 0.012, ...]
-运行3（随机种子=24681）：yaw噪声序列 [0.006, -0.008, 0.004, -0.001, ...]
-```
-
-虽然都符合相同的统计分布（均值0，标准差0.01），但具体数值完全不同。
-
-#### 2.4 设置种子后的确定性机制
-
-当设置了 `noise_seed: 42` 后：
-
-```cpp
-// 确定性初始化过程
-setNoiseRandomSeed(42);  // 全局RNG始终用种子42初始化
-
-// 每次运行时
-std::mt19937& rng = getGlobalNoiseRNG();  // 总是相同的初始状态
-transSampler.seed(rng());                 // 总是得到相同的种子值A
-rotSampler.seed(rng());                   // 总是得到相同的种子值B
-```
-
-**结果**：
-- 每次运行，采样器的种子完全相同
-- 相同参数 + 相同种子 = **完全相同的噪声序列**
-- 实现了噪声的可复现性
-
-#### 2.5 实际应用示例
-
-在图边噪声添加中的体现：
-
-```cpp
-void GraphConstructor::addNoiseToGraph(GaussianGen& transSampler, GaussianGen& rotSampler){
-    std::mt19937& gen = getGlobalNoiseRNG();  // 获取（可能确定性的）随机数生成器
-    std::normal_distribution<> d{0, 0.01};    // yaw噪声分布：均值0，标准差0.01
-    
-    for (size_t i = 0; i < drEdges_.size(); ++i) {
-        double yaw = d(gen);  // 从分布中采样yaw噪声值
-        // ... 将噪声应用到第i条边的测量值
-    }
-}
-```
-
-- **无种子**：每次运行，`gen`状态不同，`d(gen)`产生不同序列
-- **有种子**：每次运行，`gen`初始状态相同，`d(gen)`产生相同序列
-
-#### 2.6 类比理解
-
-可以这样理解噪声参数与随机种子的关系：
-
-- **噪声参数**：定义了"从什么样的袋子里摸球"（袋子里球的分布）
-- **随机种子**：决定了"按什么顺序摸球"（摸球的具体序列）
-- **可复现性**：固定种子 = 每次都按相同顺序摸球 = 得到相同结果
-- **随机性**：不固定种子 = 每次摸球顺序随机 = 符合统计规律但结果不同
+> 说明：历史版本曾使用单一参数 `noise_seed` 与“全局RNG”控制两个阶段。当前代码已改为**双通道RNG**，为了避免误导，本文已将旧机制的长篇解释缩减，并集中放到下文“过时接口（已缩减）”小节。
 
 ### 3. 代码实现架构
 
 高斯噪声的实现分布在以下几个关键文件中：
 
-#### 3.1 全局随机数管理 (`utils_g2o.hpp/cpp`)
+#### 3.1 随机数管理（当前版本：双通道RNG）`utils_g2o.hpp/cpp`
 ```cpp
-// 核心API
-void setNoiseRandomSeed(int seed);      // 设置全局随机种子
-bool isNoiseSeedSet();                  // 检查种子是否已设置
-std::mt19937& getGlobalNoiseRNG();      // 获取全局随机数生成器
-int getCurrentNoiseSeed();              // 获取当前使用的噪声种子
+// 核心API（DR / 子图独立）
+void initNoiseRNGs(int seed_dr, int seed_submap);
+std::mt19937& getDRNoiseRNG();
+std::mt19937& getSubmapNoiseRNG();
+int getCurrentDRSeed();
+int getCurrentSubmapSeed();
 ```
 
-#### 3.2 噪声生成器初始化 (`generateGaussianNoise`)
+#### 3.1.1 过时接口（保留名词，已缩减说明）
+
+历史版本曾使用“全局RNG + 单一 `noise_seed`”来同时控制 DR 与子地图噪声，并对应过如下接口（或同名概念）：
+- `setNoiseRandomSeed(...)`
+- `getGlobalNoiseRNG()`
+- `getCurrentNoiseSeed()`
+- `isNoiseSeedSet()`
+
+这些接口/概念在当前代码路径中已不再作为主机制使用，已由 **双通道RNG（DR/Submap）** 替代。本文已将旧机制的详细解释删除/缩减，原因是它会让读者误以为仍可通过单一 `noise_seed` 达到在线/离线一致性，从而造成配置与实验复现错误。
+
+#### 3.2 噪声生成器初始化（采样器显式绑定通道RNG）`generateGaussianNoise`
 - 定义平移和旋转的噪声协方差矩阵
-- 根据是否设置种子来决定采样器的初始化方式
+- 由调用方传入对应通道的 `std::mt19937& rng`，确保可复现且互不干扰
 - 返回信息矩阵供后续使用
 
 #### 3.3 图边噪声添加 (`GraphConstructor::addNoiseToGraph`)
@@ -441,14 +394,14 @@ int getCurrentNoiseSeed();              // 获取当前使用的噪声种子
 
 1. 系统初始化
    ├── 加载 config.yaml 配置
-   ├── 设置随机种子 (如果配置了 noise_seed)
-   └── 初始化噪声采样器 generateGaussianNoise()
+   ├── 初始化双通道RNG：initNoiseRNGs(noise_seed_dr, noise_seed_submap)
+   └── 初始化噪声采样器：generateGaussianNoise(..., getDRNoiseRNG()) 与 generateGaussianNoise(..., getSubmapNoiseRNG())
 
 2. 子地图处理循环 (对每个子地图执行)
    ├── 寻找与已注册子地图的重叠区域
    ├── 构建目标子地图 (合并重叠的已注册子地图)
    ├── 🔴 第一阶段噪声注入: addNoiseToSubmap()
-   │   ├── 噪声参数: std=0.1弧度 (yaw轴)  
+   │   ├── 噪声参数: std=0.05弧度 (yaw轴)
    │   ├── 目标: 当前子地图的位姿和点云
    │   └── 影响: GICP配准的输入数据
    ├── 执行 GICP 点云配准
@@ -457,7 +410,7 @@ int getCurrentNoiseSeed();              // 获取当前使用的噪声种子
 
 3. 图构建后处理
    ├── 🔴 第二阶段噪声注入: addNoiseToGraph()
-   │   ├── 噪声参数: std=0.01弧度 (yaw轴)
+   │   ├── 噪声参数: std=0.005弧度 (yaw轴)
    │   ├── 目标: 所有DR边的测量值
    │   └── 影响: 图优化的约束输入
    ├── 创建初始估计
@@ -472,23 +425,23 @@ int getCurrentNoiseSeed();              // 获取当前使用的噪声种子
 sequenceDiagram
   autonumber
   participant U as "用户/配置"
-  participant RNG as "全局RNG(noise_seed)"
+  participant RNG as "双通道RNG(DR/Submap)"
   participant SLAM as "SLAM主循环"
   participant GICP as "GICP配准"
   participant Graph as "图构建/优化"
 
-  U->>RNG: 设置 noise_seed(可选)
-  SLAM->>RNG: 初始化噪声采样器
+  U->>RNG: 初始化 noise_seed_dr / noise_seed_submap(可选)
+  SLAM->>RNG: initNoiseRNGs() + 初始化采样器
   loop 每个子地图
     SLAM->>SLAM: 查找重叠/构建目标子图
-    SLAM->>RNG: 获取yaw噪声(σ=0.1)
+    SLAM->>RNG: 获取子图通道yaw噪声(σ=0.05)
     RNG-->>SLAM: yaw_noise_submap
     SLAM->>SLAM: addNoiseToSubmap(匹配前)
     SLAM->>GICP: 执行配准
     GICP-->>SLAM: 结果
     SLAM->>Graph: 创建顶点/DR边/回环
   end
-  SLAM->>RNG: 获取yaw噪声(σ=0.01)
+  SLAM->>RNG: 获取DR通道yaw噪声(σ=0.005)
   RNG-->>Graph: yaw_noise_graph
   Graph->>Graph: addNoiseToGraph(优化前)
   Graph->>Graph: 初始估计/优化
@@ -508,7 +461,7 @@ if (config["add_gaussian_noise"].as<bool>()) {
 // 数据流:
 输入: SubmapObj submap_i (原始子地图)
 ├── 提取当前位姿: submap.submap_tf_
-├── 生成yaw噪声: std::normal_distribution<>{0, 0.1}(getGlobalNoiseRNG())
+├── 生成yaw噪声: std::normal_distribution<>{0, 0.05}(getSubmapNoiseRNG())
 ├── 构建噪声变换矩阵: AngleAxisd(yaw_noise, Vector3d::UnitZ())
 ├── 应用噪声变换到点云: pcl::transformPointCloud()
 └── 更新子地图位姿: submap.submap_tf_ = noisy_transform
@@ -528,7 +481,7 @@ if (add_gaussian_noise) {
 输入: vector<EdgeSE3*> drEdges_ (DR边集合)
 ├── 对每条DR边的测量值 drMeas_[i]:
 ├── 提取原始位姿变换: meas_i.translation(), meas_i.linear()
-├── 生成yaw噪声: std::normal_distribution<>{0, 0.01}(getGlobalNoiseRNG())
+├── 生成yaw噪声: std::normal_distribution<>{0, 0.005}(getDRNoiseRNG())（每条边创建新的 distribution，避免Box-Muller缓存）
 ├── 构建噪声变换: AngleAxisd(yaw_noise, Vector3d::UnitZ())
 ├── 应用噪声: rot = gtQuat * noise_rot, trans = gtTrans + noise_trans
 └── 更新边测量值: drMeas_[i] = noisy_measurement
@@ -540,8 +493,8 @@ if (add_gaussian_noise) {
 
 | 特性                | 第一阶段 (addNoiseToSubmap) | 第二阶段 (addNoiseToGraph) |
 |---------------------|----------------------------|---------------------------|
-| **标准差**          | 0.1 弧度                   | 0.01 弧度                 |
-| **噪声强度**        | 较强 (约5.7度)             | 较弱 (约0.57度)           |
+| **标准差**          | 0.05 弧度                  | 0.005 弧度                |
+| **噪声强度**        | 较强 (约2.86度)            | 较弱 (约0.286度)          |
 | **应用频率**        | 每个有重叠的子地图一次      | 所有DR边一次性处理        |
 | **影响范围**        | 单个子地图                 | 整个位姿图               |
 | **数据类型**        | 子地图位姿 + 点云          | 图边测量值               |
@@ -551,26 +504,153 @@ if (add_gaussian_noise) {
 #### 4.4 种子控制范围
 
 ```cpp
-// 全局种子控制两个阶段的示例
-setNoiseRandomSeed(42);  // 设置种子42
+// 当前版本：双通道种子控制两个阶段（推荐）
+initNoiseRNGs(/*seed_dr=*/20, /*seed_submap=*/21);
 
-// 第一阶段使用
-std::mt19937& gen1 = getGlobalNoiseRNG();  // 从种子42的序列中取值
-double yaw_noise_1 = std::normal_distribution<>{0, 0.1}(gen1);
+std::mt19937& submap_gen = getSubmapNoiseRNG();
+double yaw_noise_submap = std::normal_distribution<>{0, 0.05}(submap_gen);
 
-// 第二阶段使用  
-std::mt19937& gen2 = getGlobalNoiseRNG();  // 继续从相同序列中取值
-double yaw_noise_2 = std::normal_distribution<>{0, 0.01}(gen2);
-
-// 结果: 相同种子 → 完全可复现的噪声序列
+std::mt19937& dr_gen = getDRNoiseRNG();
+double yaw_noise_dr = std::normal_distribution<>{0, 0.005}(dr_gen);
 ```
 
 ### 5. 执行流程总结
 
 1. **系统初始化**: 加载配置、设置种子、初始化采样器
 2. **双阶段噪声注入**: 分别在配准前和图优化前注入不同强度的噪声
-3. **统一种子控制**: 一个种子控制整个流程的所有随机性
+3. **双通道RNG控制**: DR与子地图使用独立RNG，互不干扰
 4. **分层测试策略**: 既测试前端配准也测试后端优化的鲁棒性
+
+## 技术细节与常见陷阱
+
+### 1. std::normal_distribution 的 Box-Muller 缓存问题
+
+**问题描述**：
+`std::normal_distribution` 使用 Box-Muller 算法从均匀分布生成正态分布随机数。该算法每次从底层RNG获取两个均匀随机数，生成两个正态随机数，其中一个立即返回，另一个缓存供下次使用。
+
+**影响**：
+```cpp
+// 离线批量加噪（错误示例）
+std::normal_distribution<> d{0,0.005};  // 创建一次，复用
+for (size_t i = 0; i < 37; ++i) {
+    double yaw = d(gen);  // RNG消费模式: 2-0-2-0-2-0...
+}
+
+// 在线逐边加噪
+void addNoiseToLastDREdge() {
+    std::normal_distribution<> d{0,0.005};  // 每次创建新的
+    double yaw = d(gen);  // RNG消费模式: 2-2-2-2-2-2...
+}
+```
+
+**结果**：即使使用相同种子，离线模式第1条DR边消费`gen()`两次，第2条不消费，第3条又消费两次...而在线模式每条边都消费两次，导致从第2条边开始随机数序列就错位了。
+
+**解决方案**：
+```cpp
+// 离线批量加噪（正确示例）
+for (size_t i = 0; i < 37; ++i) {
+    std::normal_distribution<> d{0,0.005};  // 每次都创建新的
+    double yaw = d(gen);  // RNG消费模式: 2-2-2-2-2-2...
+}
+```
+
+**关键原则**：
+- ✅ **每次加噪都创建新的 distribution 实例**
+- ❌ 避免复用 distribution，即使在循环中
+
+### 2. 无效代码的RNG消费问题
+
+**问题描述**：
+历史代码中可能存在调用 `generateSample()` 但不使用结果的情况：
+
+```cpp
+// 危险示例：虽然结果未使用，但仍消费RNG！
+Eigen::Vector3d quatXYZ = rotSampler.generateSample();  // 消费RNG
+double qw = 1.0 - quatXYZ.norm();
+// ... 但最后用的是 rot(m)，不是 quatXYZ
+Eigen::Quaterniond rot(m);  // quatXYZ被浪费了
+```
+
+**影响**：
+- 每次调用 `generateSample()` 都会消费采样器内部RNG的状态
+- 即使结果被注释掉或未使用，RNG已经被消费
+- 导致在线/离线模式的随机数序列不同步
+
+**解决方案**：
+```cpp
+// 正确做法：注释掉无用的采样调用
+// Eigen::Vector3d quatXYZ = rotSampler.generateSample();  // 已注释
+// double qw = 1.0 - quatXYZ.norm();
+// Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());
+Eigen::Quaterniond rot(m);  // 直接使用 yaw 噪声构造的旋转
+```
+
+**关键原则**：
+- ✅ **彻底注释掉不使用的 generateSample() 调用**
+- ✅ 保留注释代码以便理解历史逻辑
+- ❌ 避免"生成但不用"的随机数
+
+### 3. RNG独立性验证方法
+
+**验证在线/离线一致性的完整步骤**：
+
+1. **配置相同种子**：
+```yaml
+add_gaussian_noise: true
+noise_seed_dr: 20
+noise_seed_submap: 21
+```
+
+2. **运行离线模式** (`online_opt_enable: false`)，记录：
+```
+[离线] drMeas_[0-2] yaw: 0.192939, 0.000685018, 0.00269812
+[离线累积] 累积DR[2]后位姿: 14.7435, 169.923, 0
+```
+
+3. **运行在线模式** (`online_opt_enable: true`)，对比：
+```
+[在线] drMeas_[0-2] yaw: 0.192939, 0.000685018, 0.00269812  ✓
+[在线累积] 累积DR[2]后位姿: 14.7435, 169.923, 0  ✓
+```
+
+4. **验证文件**：
+```bash
+# poses_corrupted.txt 应该完全相同
+diff poses_corrupted_offline.txt poses_corrupted_online.txt
+# 无输出说明一致
+```
+
+**常见不一致原因**：
+- ❌ Box-Muller 缓存：distribution 复用导致RNG消费模式不同
+- ❌ 无效采样：generateSample() 被调用但结果未使用
+- ❌ 共享RNG：DR和子地图噪声使用同一个RNG
+- ❌ 调用顺序：在线/离线模式对RNG的访问顺序不同
+
+### 4. 调试输出说明
+
+**关键调试信息**：
+```
+=== 噪声系统已初始化（双种子模式）===
+DR边实际种子: 20
+子地图实际种子: 21
+```
+
+**批量加噪vs逐边加噪对比**：
+```
+[离线批量加噪] DR[0] yaw噪声: 0.00752626 rad
+[在线逐边加噪] DR[0] yaw噪声: 0.00752626 rad  ← 应该相同
+```
+
+**累积位姿对比**（最敏感的验证指标）：
+```
+[离线累积] 累积DR[2]后位姿: 14.7435, 169.923, 0
+[在线累积] 累积DR[2]后位姿: 14.7435, 169.923, 0  ← 应该完全相同
+```
+
+**关键原则**：
+- 如果 DR[0] 相同但 DR[1] 开始分叉 → RNG消费模式问题
+- 如果累积位姿的 X/Y 坐标有差异 → yaw 值不同（旋转影响平移）
+- 如果所有yaw值都相同但累积位姿不同 → 累积公式或起始位姿有差异
 
 ## 使用指南
 
@@ -695,13 +775,11 @@ online_opt_enable: true/false
 ```
 **问题**：每次运行随机种子不同，无法对比
 
-**错误2：使用旧版单种子配置**
-```yaml
-# ❌ 已废弃
-add_gaussian_noise: true
-noise_seed: 20            # 旧参数，已不再使用
-```
-**问题**：程序会忽略 `noise_seed`，使用随机种子
+**错误2：使用旧版单种子配置（已缩减说明）**
+
+- `noise_seed` 属于旧版本“全局RNG+单种子”机制的遗留配置项。
+- **当前代码采用双通道RNG（`noise_seed_dr` / `noise_seed_submap`）**，因此该参数会被忽略。
+- 为避免误导，本文不再重复展开旧机制细节，仅保留该提示用于排查配置错误。
 
 **错误3：只设置一个种子，期望两阶段都固定**
 ```yaml
@@ -781,8 +859,8 @@ noise_seed_submap: 2938475610  # 使用之前运行时显示的子地图种子�
 
 ```cpp
 // 位置: utils_g2o.cpp addNoiseToSubmap() 函数
-std::mt19937& gen = getGlobalNoiseRNG();        // 全局种子控制的随机数生成器
-std::normal_distribution<> d{0, 0.1};           // yaw噪声: 均值0，标准差0.1弧度(5.73°)
+std::mt19937& gen = getSubmapNoiseRNG();        // 子图通道随机数生成器
+std::normal_distribution<> d{0, 0.05};          // yaw噪声: 均值0，标准差0.05弧度(2.86°)
 
 // 噪声应用
 double roll = 0.0, pitch = 0.0, yaw = d(gen);  // 只有yaw有噪声
@@ -795,8 +873,9 @@ Matrix3d m = AngleAxisd(roll, Vector3d::UnitX()) *
 
 ```cpp
 // 位置: graph_construction.cpp addNoiseToGraph() 函数
-std::mt19937& gen = getGlobalNoiseRNG();        // 相同的全局随机数生成器
-std::normal_distribution<> d{0, 0.01};          // yaw噪声: 均值0，标准差0.01弧度
+std::mt19937& gen = getDRNoiseRNG();            // DR通道随机数生成器
+// 重要：为了避免 Box-Muller 缓存导致在线/离线RNG消费不一致，离线批量加噪需要每条边创建新的 distribution
+std::normal_distribution<> d{0, 0.005};         // yaw噪声: 均值0，标准差0.005弧度(0.286°)
 
 // 噪声应用
 double roll = 0.0, pitch = 0.0, yaw = d(gen);  // 只有yaw有噪声
@@ -829,11 +908,11 @@ std::vector<double> noiseRotation = {0.0001, 0.0001, 0.001}; // 旋转噪声参�
 
 | 参数类型 | 第一阶段 | 第二阶段 | 说明 |
 |---------|---------|---------|------|
-| **yaw标准差** | 0.1弧度 (~5.7°) | 0.01弧度 (~0.57°) | 实际使用的参数 |
+| **yaw标准差** | 0.05弧度 (~2.86°) | 0.005弧度 (~0.286°) | 实际使用的参数 |
 | **roll噪声** | 0.0 | 0.0 | 被禁用 |
 | **pitch噪声** | 0.0 | 0.0 | 被禁用 |  
 | **平移噪声** | 0.0 | 0.0 | 被禁用 |
-| **随机数源** | getGlobalNoiseRNG() | getGlobalNoiseRNG() | 相同的种子控制 |
+| **随机数源** | getSubmapNoiseRNG() | getDRNoiseRNG() | 双通道独立控制 |
 
 **关键说明**: 
 - 虽然 `generateGaussianNoise()` 配置了完整的6DOF噪声采样器，但实际的噪声生成在两个阶段函数中独立进行
@@ -844,8 +923,8 @@ std::vector<double> noiseRotation = {0.0001, 0.0001, 0.001}; // 旋转噪声参�
 
 - **类型**: `std::mt19937`（梅森旋转算法）
 - **优点**: 高质量伪随机数，周期长，统计特性好
-- **种子管理**: 通过全局单例模式确保整个程序使用统一的随机数源
-- **种子记录**: 系统自动记录并输出当前使用的种子值，便于结果复现
+- **种子管理**: 通过双通道RNG管理（DR/Submap），避免不同噪声源互相消费随机序列
+- **种子记录**: 程序输出实际使用的 `DR边实际种子` 与 `子地图实际种子`，便于结果复现
 
 ### 种子输出机制
 
@@ -874,9 +953,9 @@ std::vector<double> noiseRotation = {0.0001, 0.0001, 0.001}; // 旋转噪声参�
 
 1. **调整第一阶段yaw噪声强度**:
 ```cpp
-// 修改第122-123行
-std::mt19937& gen = getGlobalNoiseRNG();
-std::normal_distribution<> d{0, 0.2};  // 将标准差从0.1改为0.2（更强噪声）
+// 修改 addNoiseToSubmap() 中的分布参数
+std::mt19937& gen = getSubmapNoiseRNG();
+std::normal_distribution<> d{0, 0.1};  // 示例：将标准差从0.05改为0.1（更强噪声）
 ```
 
 2. **启用第一阶段平移噪声**:
@@ -890,9 +969,11 @@ Eigen::Vector3d trans = transSampler.generateSample();  // 取消注释
 
 1. **调整第二阶段yaw噪声强度**:
 ```cpp
-// 修改第202-203行
-std::mt19937& gen = getGlobalNoiseRNG();
-std::normal_distribution<> d{0, 0.02};  // 将标准差从0.01改为0.02（更强噪声）
+// 修改 addNoiseToGraph()/addNoiseToLastDREdge() 中的分布参数
+// 注意：离线批量加噪在循环内创建 distribution；在线逐边加噪在函数内创建 distribution
+// 两边必须保持一致的创建方式与参数，才能保证相同种子下在线/离线一致
+std::mt19937& gen = getDRNoiseRNG();
+std::normal_distribution<> d{0, 0.01};  // 示例：将标准差从0.005改为0.01（更强噪声）
 ```
 
 2. **启用第二阶段平移噪声**:
@@ -954,41 +1035,36 @@ Eigen::Quaterniond rot(qw, quatXYZ.x(), quatXYZ.y(), quatXYZ.z());  // 取消注
 
 ### 从配置文件读取噪声参数
 
-未来版本可以考虑将硬编码的双阶段噪声参数移至 `config.yaml`：
+**已实现**：双阶段噪声参数已移至 `config.yaml`，采用平铺键名结构：
 
 ```yaml
-gaussian_noise_config:
-  # 第一阶段噪声配置（匹配前）
-  submap_level:
-    yaw_std: 0.1          # yaw轴标准差（弧度）
-    translation_std: [0.0, 0.0, 0.0]    # x,y,z平移标准差
-    rotation_std: [0.0, 0.0, 0.1]       # roll,pitch,yaw旋转标准差
-    
-  # 第二阶段噪声配置（匹配后）  
-  graph_level:
-    yaw_std: 0.01         # yaw轴标准差（弧度）
-    translation_std: [0.0, 0.0, 0.0]    # x,y,z平移标准差
-    rotation_std: [0.0, 0.0, 0.01]      # roll,pitch,yaw旋转标准差
-    
-  # 采样器基础参数
-  sampler_config:
-    translation_base: [3.0, 3.0, 0.001]
-    rotation_base: [0.0001, 0.0001, 0.001]
+# 高斯噪声标准差（仅 yaw 轴生效；其余轴暂不使用）
+submap_level_yaw_std: 0.05   # 第一阶段（匹配前）子地图噪声 yaw 标准差（弧度）
+graph_level_yaw_std: 0.005   # 第二阶段（匹配后）图边噪声 yaw 标准差（弧度）
 ```
+
+**重要说明**：当前实现仅使用 yaw 轴标准差，不启用 x/y/z 平移噪声或 roll/pitch 旋转噪声。
 
 实现示例：
 ```cpp
-// 在相应函数中读取配置
-YAML::Node noise_config = config["gaussian_noise_config"];
-double submap_yaw_std = noise_config["submap_level"]["yaw_std"].as<double>();
-double graph_yaw_std = noise_config["graph_level"]["yaw_std"].as<double>();
+// 在 bathy_slam.cpp 中读取子地图级噪声参数
+const double submap_level_yaw_std = config["submap_level_yaw_std"] 
+    ? config["submap_level_yaw_std"].as<double>() : 0.05;  // 默认值
 
-// 在 addNoiseToSubmap() 中使用
-std::normal_distribution<> d{0, submap_yaw_std};
+// 在 test_slam_real.cpp 中读取图边级噪声参数
+const double graph_level_yaw_std = config["graph_level_yaw_std"]
+    ? config["graph_level_yaw_std"].as<double>() : 0.005;  // 默认值
 
-// 在 addNoiseToGraph() 中使用  
-std::normal_distribution<> d{0, graph_yaw_std};
+// 在 addNoiseToSubmap() 中使用（utils_g2o.cpp）
+std::normal_distribution<> d{0, yaw_std};  // yaw_std 从调用方传入
+
+// 在 addNoiseToGraph() 中使用（graph_construction.cpp）
+std::normal_distribution<> d{0, yaw_std};  // yaw_std 从调用方传入
 ```
+
+**配置位置**：这些参数位于 `config.yaml` 中噪声种子配置之后，与 `noise_seed_dr` 和 `noise_seed_submap` 保持一致的管理方式。
+
+**向后兼容**：如果配置文件中缺少这些参数，系统将使用默认值（与原硬编码值一致），不会导致程序崩溃。
 
 ## 故障排除
 
@@ -1006,14 +1082,55 @@ std::normal_distribution<> d{0, graph_yaw_std};
     │      │     └─ 不一致 → config.yaml 未生效或被覆盖
     │      └─ 检查: 是否修改了代码中的随机逻辑？
     │
-    ├─→ 问题2: 在线/离线结果差异过大
-    │      ├─ 检查: 两次运行是否使用完全相同的种子？
-    │      │     └─ 不同 → DR边噪声不一致
-    │      ├─ 检查: add_gaussian_noise 是否都为 true？
-    │      ├─ 检查: 数据集是否完全相同？
-    │      └─ 预期: 即使种子相同，优化策略不同会导致最终结果有差异
+    ├─→ 问题2: 在线/离线结果差异过大（poses_corrupted不一致）
+    │      ├─ 步骤1: 基础配置检查
+    │      │     ├─ 两次运行是否使用完全相同的种子？
+    │      │     │     └─ 不同 → DR边噪声必然不一致
+    │      │     ├─ add_gaussian_noise 是否都为 true？
+    │      │     └─ 数据集是否完全相同？
+    │      │
+    │      ├─ 步骤2: 对比调试输出
+    │      │     ├─ 检查终端输出: DR边实际种子是否相同？
+    │      │     │     └─ [离线] DR边实际种子: 20
+    │      │     │     └─ [在线] DR边实际种子: 20  ← 应该一致
+    │      │     ├─ 检查: drMeas_ 数量是否相同？
+    │      │     │     └─ 不同 → 构建的DR边数量不一致
+    │      │     ├─ 检查: 起始位姿矩阵是否完全相同？
+    │      │     │     └─ vertices_[0] vs submaps_gt[0]
+    │      │     └─ 检查: 前3条DR边的yaw值是否相同？
+    │      │           └─ DR[0]: yaw=0.192939 (应该相同)
+    │      │           └─ DR[1]: yaw=0.000685 (应该相同)
+    │      │           └─ DR[2]: yaw=0.002698 (应该相同)
+    │      │
+    │      ├─ 步骤3: 定位分叉点
+    │      │     ├─ 如果 DR[0] 相同但 DR[1] 开始不同
+    │      │     │     ├─→ 可能原因1: std::normal_distribution 缓存
+    │      │     │     │     └─ 检查代码: 离线是否在循环外创建distribution？
+    │      │     │     │     └─ 修复: 改为在循环内每次创建新实例
+    │      │     │     ├─→ 可能原因2: 无效的 generateSample() 调用
+    │      │     │     │     └─ 检查代码: 是否有结果未使用的采样调用？
+    │      │     │     │     └─ 修复: 注释掉无用的 generateSample()
+    │      │     │     └─→ 可能原因3: RNG被其他地方消费
+    │      │     │           └─ 检查: 在DR[0]和DR[1]之间是否有子地图噪声？
+    │      │     │           └─ 检查: 是否误用了getDRNoiseRNG()？
+    │      │     └─ 如果所有DR边的yaw都不同
+    │      │           └─→ 初始化问题: DR RNG的种子可能未正确设置
+    │      │
+    │      ├─ 步骤4: 验证累积位姿
+    │      │     └─ 对比累积位姿的 translation (最敏感指标):
+    │      │           ├─ [离线累积] 累积DR[2]后: 14.7435, 169.923, 0
+    │      │           └─ [在线累积] 累积DR[2]后: 14.7435, 169.923, 0
+    │      │           └─ 如果X/Y有差异 → yaw值不同导致
+    │      │
+    │      └─ 步骤5: 最终验证
+    │            └─ 比较文件: diff poses_corrupted_offline.txt poses_corrupted_online.txt
+    │                  ├─ 无差异 → 问题解决 ✓
+    │                  └─ 有差异 → 继续排查RNG消费路径
+    │
+    │      注意: 即使poses_corrupted一致，poses_optimized仍可能不同，因为:
     │            └─ 在线模式：增量优化 + 实时误差累积
     │            └─ 离线模式：全局优化 + 批量误差注入
+    │            └─ 这是正常现象，不是bug
     │
     ├─→ 问题3: 没有看到噪声效果
     │      ├─ 检查: add_gaussian_noise 是否为 true？
@@ -1093,13 +1210,25 @@ std::normal_distribution<> d{0, graph_yaw_std};
 
 ### 相关源码文件
 - **主要实现**:
-  - `src/graph_optimization/src/utils_g2o.cpp` - 全局随机数管理、第一阶段噪声实现
-  - `src/graph_optimization/src/graph_construction.cpp` - 第二阶段噪声实现
-  - `src/apps/src/test_slam_real.cpp` - 噪声控制流程、种子设置
-  - `src/bathy_slam/src/bathy_slam.cpp` - 第一阶段噪声调用
+  - `src/graph_optimization/src/utils_g2o.cpp` - **双通道RNG管理**、子地图噪声实现
+    - `initNoiseRNGs(seed_dr, seed_submap)` - 初始化独立RNG
+    - `getDRNoiseRNG()` / `getSubmapNoiseRNG()` - 获取专用RNG
+    - `addNoiseToSubmap()` - 子地图级噪声注入
+  - `src/graph_optimization/src/graph_construction.cpp` - **DR边噪声实现**
+    - `addNoiseToGraph()` - 离线批量加噪（每次创建新distribution）
+    - `addNoiseToLastDREdge()` - 在线逐边加噪
+    - ⚠️ 重要：两个函数都在循环/函数内创建distribution，避免Box-Muller缓存
+  - `src/apps/src/test_slam_real.cpp` - **噪声控制流程、种子设置**
+    - 读取 `noise_seed_dr` 和 `noise_seed_submap`
+    - 调用 `initNoiseRNGs()` 初始化双通道RNG
+    - 分别为DR和子地图采样器传入对应RNG
+  - `src/bathy_slam/src/bathy_slam.cpp` - **在线/离线SLAM流程**
+    - 在线模式：逐边调用 `addNoiseToLastDREdge()`
+    - 离线模式：批量调用 `addNoiseToGraph()`
+    - 子地图噪声调用 `addNoiseToSubmap()`
 
 - **头文件**:
-  - `src/graph_optimization/include/graph_optimization/utils_g2o.hpp` - 全局随机数API声明
+  - `src/graph_optimization/include/graph_optimization/utils_g2o.hpp` - **双通道RNG API声明**
   - `src/graph_optimization/include/graph_optimization/graph_construction.hpp` - 图构造相关声明
   - `src/bathy_slam/include/bathy_slam/bathy_slam.hpp` - SLAM主流程声明
 
