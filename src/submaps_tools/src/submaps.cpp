@@ -322,6 +322,8 @@ std::vector<SubmapObj, Eigen::aligned_allocator<SubmapObj>> readSubmapsInDir(con
             return extractNumber(a) < extractNumber(b);
         });
 
+        std::cout << "提示：以上为当前目录下将尝试读取的全部文件；若后续读取或评估异常，请优先检查目录中是否混入无后缀、临时文件或错误格式文件。" << std::endl;
+
         PointCloudT::Ptr submap_ptr(new PointCloudT);
         int submap_cnt = 0;
         int swath_cnt = 0;

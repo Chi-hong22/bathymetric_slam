@@ -13,8 +13,8 @@
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/250911_sub_maps/Comb_noINS/","--config","../config.yaml"],
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251111_sub_maps/NESP_noINS/","--config","../config.yaml"
             // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS/","--config","../config.yaml"],
-            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS_shortest/","--config","../config.yaml"],
-            "args": ["--simulation","yes", "--bathy_survey","../sim_data/260323_sub_maps/Ling_noINS/","--config","../config.yaml"],
+            "args": ["--simulation","yes", "--bathy_survey","../sim_data/251115_sub_maps/NESP_noINS_shortest/","--config","../config.yaml"],
+            // "args": ["--simulation","yes", "--bathy_survey","../sim_data/260323_sub_maps/Ling_noINS/","--config","../config.yaml"],
 
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",

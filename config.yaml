@@ -16,12 +16,15 @@ noise_seed: 20  # 可选的随机噪声种子, 注释掉或留空则为完全随
 # 子地图重叠放缩系数。参数越小，则对子地图的重叠区域要求越严格。
 # 对当前子图 i 和待检查的子图 j，都用 overlap_coverage 计算出它们缩放后的虚拟边界框。
 # 调用 checkSubmapsOverlap 函数，判断子图 i 的角点是否完全位于子图 j 的（缩放后）边界框内部。
-overlap_coverage: 0.5 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 
+############ 注意，该分支的噪声注入机制不成熟  ###############
+# overlap_coverage 改变了 overlaps_idx_，而 overlaps_idx_ 决定是否执行 bathy_slam.cpp:86-88 的 addNoiseToSubmap()。addNoiseToSubmap() 会直接修改子图位姿，并且会消费全局随机数；这又进一步影响后续图边噪声注入 addNoiseToGraph() 的随机序列。
+# 因此即便该参数不属于误差注入配置，它仍然会间接改变模拟惯导路径。
+overlap_coverage: 0.6 # 按此系数减少寻找重叠的子地图区域 原始数据：0.9 
 # 250828 NESP 0.6 
 # 250828 noNESP 0.5
 # 250911 Comb 0.5
 # 251111 NESP 0.6
-# 260323 Ling 0.5
+# 260323 Ling 0.6
 
 
 # GICP 配准参数（单位：米）
