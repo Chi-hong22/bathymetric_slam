@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build and run
 
 - Standard build flow comes from [README.md](README.md):
+
   ```bash
   mkdir -p build
   cd build
@@ -12,25 +13,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   make -j4
   make install
   ```
-- Keep the current dependency strategy based on `find_package(...)` in [src/CMakeLists.txt](src/CMakeLists.txt). Do not replace it with vendored dependencies or ad-hoc local absolute paths unless explicitly requested.
 - G2O is expected to be installed system-wide. Both [README.md](README.md) and [.github/copilot-instructions.md](.github/copilot-instructions.md) call this out.
 - The main executable is `bathy_slam_real`, built in [src/apps/CMakeLists.txt](src/apps/CMakeLists.txt). `read_auv_data` also builds there, but the repository does not document its CLI usage; default to working around `bathy_slam_real` unless the task explicitly targets `read_auv_data`.
 - For local runs, treat [.vscode/launch.json](.vscode/launch.json) as the best description of the current working workflow: the program is launched from `build/` and uses relative paths such as `../config.yaml` and `../sim_data/...`.
 - Common run commands:
   - Simulated submaps:
+
     ```bash
     ./bathy_slam_real --simulation yes --bathy_survey ../sim_data/map_small/ --config ../config.yaml
     ```
   - Real survey cereal input:
+
     ```bash
     ./bathy_slam_real --simulation no --bathy_survey /path/to/mbes_pings.cereal --config config.yaml
     ```
 - Common post-run analysis commands:
+
   ```bash
   python3 scripts/plot_results.py --initial_poses build/poses_original.txt --corrupted_poses build/poses_corrupted.txt --optimized_poses build/poses_optimized.txt
   python3 scripts/plot_apt.py --estimated build/poses_optimized.txt --ground_truth build/poses_original.txt --verbose
   python3 scripts/plot_ate.py --estimated build/poses_optimized.txt --ground_truth build/poses_original.txt --alignment_type se3 --verbose
   ```
+
+## C++ and CMake structure
+
+- Use [src/CMakeLists.txt](src/CMakeLists.txt) as the primary source of truth for compiler settings, dependency discovery, and top-level module layout.
+- The project prefers C++17 and currently sets `-O3 -fPIC`, with additional warnings enabled through `add_compile_options(... -Wextra)`.
+- Keep the current dependency strategy based on `find_package(...)`; do not switch to vendored dependencies, FetchContent, or local absolute-path setups unless explicitly requested.
+- Top-level modules are wired through `add_subdirectory(...)`: `apps`, `graph_optimization`, `registration`, `submaps_tools`, `bathy_slam`, and `meas_models`.
+- [src/apps/CMakeLists.txt](src/apps/CMakeLists.txt) defines the app targets and sends runtime binaries to `bin/`; if you change target names, link dependencies, output paths, or build-type-related behavior, also re-check [.vscode/launch.json](.vscode/launch.json).
 
 ## Architecture overview
 
