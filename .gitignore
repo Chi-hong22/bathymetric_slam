@@ -1,14 +1,17 @@
 *~
 *.pyc
 *.autosave
-
+.claude
 QWEN.md
+# CLAUDE.md
 .github/
 # docs/
+
 sim_data/250826_sub_maps/
 sim_data/250911_sub_maps/
 sim_data/251111_sub_maps/
 sim_data/251115_sub_maps/
+sim_data/260323_sub_maps/
 
 # Folders
 experiments/*
